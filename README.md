@@ -1,8 +1,4 @@
 # Azure Voice Live API Console Application
-
-[![.NET Build and Test](https://github.com/TakahiroMiyaura/VoiceLiveAPISamples/actions/workflows/dotnet.yml/badge.svg)](https://github.com/TakahiroMiyaura/VoiceLiveAPISamples/actions/workflows/dotnet.yml)
-[![Release](https://github.com/TakahiroMiyaura/VoiceLiveAPISamples/actions/workflows/release.yml/badge.svg)](https://github.com/TakahiroMiyaura/VoiceLiveAPISamples/releases)
-[![NuGet Version](https://img.shields.io/nuget/v/Azure.VoiceLive.API)](https://www.nuget.org/packages/Azure.VoiceLive.API)
 [![License: BSL-1.0](https://img.shields.io/badge/License-BSL--1.0-blue.svg)](https://opensource.org/licenses/BSL-1.0)
 
 A .NET 8 console application and reusable client library for real-time voice conversation with Azure AI Foundry's Voice Live API. Supports both **AI Model mode** and **AI Agent mode** with microphone input and speaker output.
