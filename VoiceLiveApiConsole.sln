@@ -1,0 +1,40 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VoiceLiveConsoleApp", "src\VoiceLiveConsoleApp\VoiceLiveConsoleApp.csproj", "{12345678-1234-1234-1234-123456789012}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VoiceLiveAPI", "src\VoiceLiveAPI\VoiceLiveAPI.csproj", "{87654321-4321-4321-4321-210987654321}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{99999999-8888-7777-6666-555555555555}"
+	ProjectSection(SolutionItems) = preProject
+		CONTRIBUTING.md = CONTRIBUTING.md
+		LICENSE = LICENSE
+		README.md = README.md
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{12345678-1234-1234-1234-123456789012}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{12345678-1234-1234-1234-123456789012}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{12345678-1234-1234-1234-123456789012}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{12345678-1234-1234-1234-123456789012}.Release|Any CPU.Build.0 = Release|Any CPU
+		{87654321-4321-4321-4321-210987654321}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{87654321-4321-4321-4321-210987654321}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{87654321-4321-4321-4321-210987654321}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{87654321-4321-4321-4321-210987654321}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{12345678-1234-1234-1234-123456789012} = {AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}
+		{87654321-4321-4321-4321-210987654321} = {AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}
+	EndGlobalSection
+EndGlobal

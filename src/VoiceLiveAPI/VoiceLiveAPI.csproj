@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>VoiceLiveAPI</AssemblyName>
+    <RootNamespace>Com.Reseul.Azure.AI.Samples.VoiceLiveAPI</RootNamespace>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Azure.VoiceLive.API</PackageId>
+    <PackageVersion>1.0.0</PackageVersion>
+    <Authors>VoiceLive API Team</Authors>
+    <Company>VoiceLive API</Company>
+    <Product>Azure Voice Live API Client</Product>
+    <Description>A .NET client library for Azure AI Foundry Voice Live API supporting both AI Model and AI Agent modes</Description>
+    <PackageTags>Azure;AI;Voice;Live;API;WebSocket;RealTime;Conversation</PackageTags>
+    <RepositoryUrl>https://github.com/TakahiroMiyaura/VoiceLiveAPISamples</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>BSL-1.0</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" Version="1.14.2" />
+    <PackageReference Include="System.Text.Json" Version="9.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Servers\Message\Commons\" />
+  </ItemGroup>
+
+</Project>
