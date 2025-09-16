@@ -4,20 +4,22 @@
 
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Commons.Messages;
 
-namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Messages.Unconfirmed.Conversations.Items;
-
-/// <summary>  
-///     Represents a conversation Item retrieved message.  
-/// </summary>  
-public class ConversationItemRetrievedMessage : VoiceLiveMessage
+namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Messages.Unconfirmed.Conversations.Items
 {
-    /// <summary>  
-    ///     Gets or sets the event ID associated with the retrieved conversation item.  
-    /// </summary>  
-    public string? event_id { get; set; } = string.Empty;
 
     /// <summary>  
-    ///     Gets or sets the information about the retrieved conversation item.  
+    ///     Represents a conversation Item retrieved message.  
     /// </summary>  
-    public ConversationResponseItemInfo? ItemInfo { get; set; }
+    public class ConversationItemRetrievedMessage : VoiceLiveMessage
+    {
+        /// <summary>  
+        ///     Gets or sets the event ID associated with the retrieved conversation item.  
+        /// </summary>  
+        public string event_id { get; set; } = string.Empty;
+
+        /// <summary>  
+        ///     Gets or sets the information about the retrieved conversation item.  
+        /// </summary>  
+        public ConversationResponseItemInfo ItemInfo { get; set; } = null;
+    }
 }

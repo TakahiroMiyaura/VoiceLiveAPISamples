@@ -4,25 +4,27 @@
 
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Commons.Messages;
 
-namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Messages.Unconfirmed.Conversations.Items;
-
-/// <summary>
-///     Represents a conversation Item input audio transcription failed message.
-/// </summary>
-public class ConversationItemInputAudioTranscriptionFailedMessage : VoiceLiveMessage
+namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Messages.Unconfirmed.Conversations.Items
 {
-    /// <summary>
-    ///     Gets or sets the Item ID.
-    /// </summary>
-    public string item_id { get; set; } = string.Empty;
 
     /// <summary>
-    ///     Gets or sets the content index.
+    ///     Represents a conversation Item input audio transcription failed message.
     /// </summary>
-    public int content_index { get; set; }
+    public class ConversationItemInputAudioTranscriptionFailedMessage : VoiceLiveMessage
+    {
+        /// <summary>
+        ///     Gets or sets the Item ID.
+        /// </summary>
+        public string item_id { get; set; } = string.Empty;
 
-    /// <summary>
-    ///     Gets or sets the error information.
-    /// </summary>
-    public ErrorInfo? error { get; set; }
+        /// <summary>
+        ///     Gets or sets the content index.
+        /// </summary>
+        public int content_index { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the error information.
+        /// </summary>
+        public ErrorInfo error { get; set; } = null;
+    }
 }

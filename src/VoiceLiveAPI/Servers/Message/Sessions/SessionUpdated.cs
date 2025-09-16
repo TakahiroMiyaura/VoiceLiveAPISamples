@@ -4,29 +4,31 @@
 
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Commons.Messages;
 
-namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message.Sessions;
-
-/// <summary>  
-/// Represents an updated server session message in the VoiceLiveAPI.  
-/// </summary>  
-public class ServerSessionUpdated : MessageBase
+namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message.Sessions
 {
-    /// <summary>  
-    /// The type identifier for the updated session message.  
-    /// </summary>  
-    public const string Type = "session.updated";
 
     /// <summary>  
-    /// Gets or sets the server session associated with the update.  
+    /// Represents an updated server session message in the VoiceLiveAPI.  
     /// </summary>  
-    public ServerSession session { get; set; }
-
-    /// <summary>  
-    /// Initializes a new instance of the <see cref="ServerSessionUpdated"/> class.  
-    /// </summary>  
-    public ServerSessionUpdated()
+    public class ServerSessionUpdated : MessageBase
     {
-        type = Type;
-        session = new ServerSession();
+        /// <summary>  
+        /// The type identifier for the updated session message.  
+        /// </summary>  
+        public const string Type = "session.updated";
+
+        /// <summary>  
+        /// Gets or sets the server session associated with the update.  
+        /// </summary>  
+        public ServerSession session { get; set; }
+
+        /// <summary>  
+        /// Initializes a new instance of the <see cref="ServerSessionUpdated"/> class.  
+        /// </summary>  
+        public ServerSessionUpdated()
+        {
+            type = Type;
+            session = new ServerSession();
+        }
     }
 }

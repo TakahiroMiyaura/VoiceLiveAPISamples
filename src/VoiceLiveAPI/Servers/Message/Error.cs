@@ -4,29 +4,31 @@
 
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Commons.Messages;
 
-namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message;
-
-/// <summary>  
-/// Represents an error message in the VoiceLiveAPI.  
-/// </summary>  
-public class Error : MessageBase
+namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message
 {
-    /// <summary>  
-    /// The type of the error message.  
-    /// </summary>  
-    public const string Type = "error";
 
     /// <summary>  
-    /// Gets or sets the details of the error.  
+    /// Represents an error message in the VoiceLiveAPI.  
     /// </summary>  
-    public ErrorDetail error { get; set; }
-
-    /// <summary>  
-    /// Initializes a new instance of the <see cref="Error"/> class.  
-    /// </summary>  
-    public Error()
+    public class Error : MessageBase
     {
-        type = Type;
-        error = new ErrorDetail();
+        /// <summary>  
+        /// The type of the error message.  
+        /// </summary>  
+        public const string Type = "error";
+
+        /// <summary>  
+        /// Gets or sets the details of the error.  
+        /// </summary>  
+        public ErrorDetail error { get; set; }
+
+        /// <summary>  
+        /// Initializes a new instance of the <see cref="Error"/> class.  
+        /// </summary>  
+        public Error()
+        {
+            type = Type;
+            error = new ErrorDetail();
+        }
     }
 }

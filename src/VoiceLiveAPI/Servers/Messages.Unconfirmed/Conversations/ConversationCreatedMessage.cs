@@ -4,15 +4,17 @@
 
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Commons.Messages;
 
-namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Messages.Unconfirmed.Conversations;
-
-/// <summary>
-///     Represents a conversation created message.
-/// </summary>
-public class ConversationCreatedMessage : VoiceLiveMessage
+namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Messages.Unconfirmed.Conversations
 {
+
     /// <summary>
-    ///     Gets or sets the conversation object.
+    ///     Represents a conversation created message.
     /// </summary>
-    public ConversationObjectInfo? conversation { get; set; }
+    public class ConversationCreatedMessage : VoiceLiveMessage
+    {
+        /// <summary>
+        ///     Gets or sets the conversation object.
+        /// </summary>
+        public ConversationObjectInfo conversation { get; set; } = null;
+    }
 }

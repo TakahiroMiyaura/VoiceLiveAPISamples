@@ -3,6 +3,7 @@
 // https://opensource.org/license/bsl-1-0
 
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Xml.Linq;
 using Azure.Core;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients;
@@ -13,6 +14,24 @@ using Microsoft.Extensions.Logging;
 using NAudio.Wave;
 
 namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI;
+
+public class Test : ILogger
+{
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    {
+        Console.WriteLine($"[{logLevel}] {formatter(state, exception)}");
+    }
+
+    public bool IsEnabled(LogLevel logLevel)
+    {
+        return true;
+    }
+
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+    {
+        return null;
+    }
+}
 
 /// <summary>
 ///     Specifies the connection mode for the VoiceInfo Live API client.
@@ -42,7 +61,7 @@ internal class Program
     private static BufferedWaveProvider waveProvider = null!;
     private static bool isRecording;
     private static bool isPlaying;
-    private static ILogger? logger;
+    private static ILogger? logger = new Test();
 
     private static string azureEndpoint = "<your Azure AI Services Endpoint>";
     private static string agentProjectName = "<your Azure AI Foundry Project Name>";
@@ -335,7 +354,7 @@ internal class Program
             logger?.Log(LogLevel.Information, $" received: {response.type}");
         };
         client.OnConversationItemTruncatedReceived += response => { logger?.Log(LogLevel.Information, $" received: {response.type}"); };
-        client.OnErrorReceived += response => { logger?.Log(LogLevel.Information, $" received: {response.type}"); };
+        client.OnErrorReceived += response => { logger?.Log(LogLevel.Information, $" received: {response.type} {JsonSerializer.Serialize(response)}"); };
         client.OnInputAudioBufferClearedReceived += response => { logger?.Log(LogLevel.Information, $" received: {response.type}"); };
         client.OnInputAudioBufferCommittedReceived += response => { logger?.Log(LogLevel.Information, $" received: {response.type}"); };
         client.OnInputAudioBufferSpeechStartedReceived += response =>
@@ -378,7 +397,7 @@ internal class Program
                 $" {response.item.role}: {response.item.content?.Select(x => x.transcript).Aggregate((a, b) => a + "\n" + b)}");
         };
         client.OnResponseTextDeltaReceived += response => { logger?.Log(LogLevel.Information, $" received: {response.type}"); };
-        client.OnResponseTextDoneReceived += response => { logger?.Log(LogLevel.Information, $" received: {response.type}"); };
+        client.OnResponseTextDoneReceived += response => { logger?.Log(LogLevel.Information, $" {response.type} : {response.text}"); };
         client.OnSessionCreatedReceived += response => { logger?.Log(LogLevel.Information, $" received: {response.type}"); };
     }
 

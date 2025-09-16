@@ -4,29 +4,31 @@
 
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Commons.Messages;
 
-namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message.Responses;
-
-/// <summary>  
-/// Represents a message indicating that a response has been created.  
-/// </summary>  
-public class ResponseCreated : MessageBase
+namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message.Responses
 {
-    /// <summary>  
-    /// The type identifier for the "response.created" message.  
-    /// </summary>  
-    public const string Type = "response.created";
 
     /// <summary>  
-    /// Gets or sets the response associated with this message.  
+    /// Represents a message indicating that a response has been created.  
     /// </summary>  
-    public Response response { get; set; }
-
-    /// <summary>  
-    /// Initializes a new instance of the <see cref="ResponseCreated"/> class.  
-    /// </summary>  
-    public ResponseCreated()
+    public class ResponseCreated : MessageBase
     {
-        type = Type;
-        response = new Response();
+        /// <summary>  
+        /// The type identifier for the "response.created" message.  
+        /// </summary>  
+        public const string Type = "response.created";
+
+        /// <summary>  
+        /// Gets or sets the response associated with this message.  
+        /// </summary>  
+        public Response response { get; set; }
+
+        /// <summary>  
+        /// Initializes a new instance of the <see cref="ResponseCreated"/> class.  
+        /// </summary>  
+        public ResponseCreated()
+        {
+            type = Type;
+            response = new Response();
+        }
     }
 }

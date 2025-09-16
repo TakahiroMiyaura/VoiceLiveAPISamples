@@ -4,41 +4,43 @@
 
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Commons.Messages;
 
-namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message.Responses.OutputItems;
-
-/// <summary>  
-/// Represents a response indicating that an output item has been completed.  
-/// </summary>  
-public class ResponseOutputItemDone : MessageBase
+namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message.Responses.OutputItems
 {
-    /// <summary>  
-    /// The type identifier for this response.  
-    /// </summary>  
-    public const string Type = "response.output_item.done";
 
     /// <summary>  
-    /// Gets or sets the unique identifier for the response.  
+    /// Represents a response indicating that an output item has been completed.  
     /// </summary>  
-    public string response_id { get; set; }
-
-    /// <summary>  
-    /// Gets or sets the index of the output item.  
-    /// </summary>  
-    public int output_index { get; set; }
-
-    /// <summary>  
-    /// Gets or sets the item associated with the response.  
-    /// </summary>  
-    public Item item { get; set; }
-
-    /// <summary>  
-    /// Initializes a new instance of the <see cref="ResponseOutputItemDone"/> class.  
-    /// </summary>  
-    public ResponseOutputItemDone()
+    public class ResponseOutputItemDone : MessageBase
     {
-        type = Type;
-        response_id = string.Empty;
-        output_index = 0;
-        item = new Item();
+        /// <summary>  
+        /// The type identifier for this response.  
+        /// </summary>  
+        public const string Type = "response.output_item.done";
+
+        /// <summary>  
+        /// Gets or sets the unique identifier for the response.  
+        /// </summary>  
+        public string response_id { get; set; }
+
+        /// <summary>  
+        /// Gets or sets the index of the output item.  
+        /// </summary>  
+        public int output_index { get; set; }
+
+        /// <summary>  
+        /// Gets or sets the item associated with the response.  
+        /// </summary>  
+        public Item item { get; set; }
+
+        /// <summary>  
+        /// Initializes a new instance of the <see cref="ResponseOutputItemDone"/> class.  
+        /// </summary>  
+        public ResponseOutputItemDone()
+        {
+            type = Type;
+            response_id = string.Empty;
+            output_index = 0;
+            item = new Item();
+        }
     }
 }

@@ -4,21 +4,23 @@
 
 using System.Text.Json.Serialization;
 
-namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Commons.Messages;
-
-/// <summary>
-/// Represents information about a conversation object.
-/// </summary>
-public class ConversationObjectInfo
+namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Commons.Messages
 {
-    /// <summary>
-    /// Gets or sets the unique ID of the conversation.
-    /// </summary>
-    public string? id { get; set; }
 
     /// <summary>
-    /// The object type must be realtime.conversation.
+    /// Represents information about a conversation object.
     /// </summary>
-    [JsonPropertyName("object")]
-    public string? objectInfo { get; set; }
+    public class ConversationObjectInfo
+    {
+        /// <summary>
+        /// Gets or sets the unique ID of the conversation.
+        /// </summary>
+        public string id { get; set; } = null;
+
+        /// <summary>
+        /// The object type must be realtime.conversation.
+        /// </summary>
+        [JsonPropertyName("object")]
+        public string objectInfo { get; set; } = null;
+    }
 }

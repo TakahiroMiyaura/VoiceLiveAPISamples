@@ -3,15 +3,17 @@
 // https://opensource.org/license/bsl-1-0
 
 
-namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Commons.Messages;
-
-/// <summary>
-/// Represents the settings for echo cancellation applied to the audio input.
-/// </summary>
-public class AudioInputEchoCancellationSettings
+namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Commons.Messages
 {
-    /// <summary>  
-    /// Gets or sets the type of noise reduction applied to the audio input.  
-    /// </summary>  
-    public string? type { get; set; }
+
+    /// <summary>
+    /// Represents the settings for echo cancellation applied to the audio input.
+    /// </summary>
+    public class AudioInputEchoCancellationSettings
+    {
+        /// <summary>  
+        /// Gets or sets the type of noise reduction applied to the audio input.  
+        /// </summary>  
+        public string type { get; set; } = null;
+    }
 }

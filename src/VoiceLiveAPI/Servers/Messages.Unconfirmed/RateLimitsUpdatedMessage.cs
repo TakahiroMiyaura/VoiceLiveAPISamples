@@ -4,15 +4,17 @@
 
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Commons.Messages;
 
-namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Messages.Unconfirmed;
-
-/// <summary>
-///     Represents a rate limits updated message.
-/// </summary>
-public class RateLimitsUpdatedMessage : VoiceLiveMessage
+namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Messages.Unconfirmed
 {
+
     /// <summary>
-    ///     Gets or sets the rate limits information.
+    ///     Represents a rate limits updated message.
     /// </summary>
-    public LimitsUpdatedRateLimitsItembjectInfo? rate_limits { get; set; }
+    public class RateLimitsUpdatedMessage : VoiceLiveMessage
+    {
+        /// <summary>
+        ///     Gets or sets the rate limits information.
+        /// </summary>
+        public LimitsUpdatedRateLimitsItembjectInfo rate_limits { get; set; } = null;
+    }
 }
