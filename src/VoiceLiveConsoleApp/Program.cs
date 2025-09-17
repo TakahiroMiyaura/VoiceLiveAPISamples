@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Xml.Linq;
 using Azure.Core;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients;
+using static Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.AuthenticationType;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.Messages.InputAudioBuffers;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.Messages.Sessions;
 using Microsoft.Extensions.Configuration;
@@ -95,7 +96,7 @@ internal class Program
             var mode = ChooseConnectionMode();
 
             // Initialize client based on mode
-            InitializeClient(mode);
+            await InitializeClientAsync(mode);
             SetupClientEvents();
 
             // Initialize audio components
@@ -182,62 +183,53 @@ internal class Program
         }
     }
 
-    private static void InitializeClient(ConnectionMode mode)
+    private static async Task InitializeClientAsync(ConnectionMode mode)
     {
+        Console.WriteLine("Choose authentication method:");
+        Console.WriteLine("1. API Key");
+        Console.WriteLine("2. Entra ID (DefaultAzureCredential)");
+        Console.Write("Enter your choice (1 or 2): ");
+
+        var authChoice = ChooseAuthMethod();
+        var authMethod = authChoice == 1 ? AuthenticationHelper.AuthenticationMethod.ApiKey : AuthenticationHelper.AuthenticationMethod.EntraId;
+        
+        string accessToken;
+        AuthenticationType authenticationType;
+        
+        try
+        {
+            accessToken = await AuthenticationHelper.GetAccessTokenAsync(
+                authMethod, 
+                apiKey, 
+                azureIdentityTokenRequestUrl
+            );
+            
+            // Set authentication type based on method
+            authenticationType = authMethod == AuthenticationHelper.AuthenticationMethod.ApiKey ? ApiKey : BearerToken;
+            
+            Console.WriteLine($" Using {authMethod} authentication (Type: {authenticationType})");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($" Authentication failed: {ex.Message}");
+            throw;
+        }
+
         switch (mode)
         {
             case ConnectionMode.AIModel:
                 Console.WriteLine("Initializing AI Model client...");
-                Console.WriteLine("Choose authentication method:");
-                Console.WriteLine("1. API Key");
-                Console.WriteLine("2. Entra ID (DefaultAzureCredential)");
-                Console.Write("Enter your choice (1 or 2): ");
-
-                var authChoice = ChooseAuthMethod();
-                if (authChoice == 1)
-                {
-                    client = new AIModelClient(azureEndpoint, apiKey);
-                    Console.WriteLine(" Using API Key authentication");
-                }
-                else
-                {
-                    var requestContext =
-                        new TokenRequestContext(new[] { azureIdentityTokenRequestUrl });
-                    client = new AIModelClient(azureEndpoint, requestContext);
-                    Console.WriteLine(" Using Entra ID authentication");
-                }
-
+                client = new AIModelClient(azureEndpoint, accessToken, authenticationType);
                 break;
 
             case ConnectionMode.AIAgent:
                 Console.WriteLine("Initializing AI Agent client...");
-                Console.WriteLine("Choose authentication method:");
-                Console.WriteLine("1. API Key");
-                Console.WriteLine("2. Entra ID (DefaultAzureCredential)");
-                Console.Write("Enter your choice (1 or 2): ");
-
-                var agentAuthChoice = ChooseAuthMethod();
-                if (agentAuthChoice == 1)
-                {
-                    client = new AIAgentClient(azureEndpoint, apiKey, agentProjectName, agentId,
-                        agentAccessToken);
-                    Console.WriteLine(" Using API Key authentication");
-                }
-                else
-                {
-                    var requestContext =
-                        new TokenRequestContext(new[] { azureIdentityTokenRequestUrl });
-                    client = new AIAgentClient(azureEndpoint, requestContext, agentProjectName, agentId);
-                    Console.WriteLine(" Using Entra ID authentication");
-                }
-
+                client = new AIAgentClient(azureEndpoint, accessToken, authenticationType, agentProjectName, agentId);
                 break;
 
             default:
                 throw new ArgumentException($"Unsupported mode: {mode}");
         }
-
-
     }
 
     private static int ChooseAuthMethod()
@@ -277,7 +269,7 @@ internal class Program
             var newMode = ChooseConnectionMode();
 
             // Initialize new client
-            InitializeClient(newMode);
+            await InitializeClientAsync(newMode);
             SetupClientEvents();
 
             // Reconnect
@@ -567,7 +559,7 @@ internal class Program
                 Console.WriteLine($"Agent ID: {agentClient.AgentId}");
             }
 
-            Console.WriteLine($"Auth Method: {client.AuthMethod}");
+            Console.WriteLine("Auth Method: Token-based");
             Console.WriteLine($"Endpoint: {client.Endpoint}");
 
             var queueCount = client.GetAudioQueueCount();

@@ -9,8 +9,8 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Azure.VoiceLive.API</PackageId>
     <PackageVersion>1.0.0</PackageVersion>
-    <Authors>VoiceLive API Team</Authors>
-    <Company>VoiceLive API</Company>
+    <Authors>Takahiro Miyaura</Authors>
+    <Company>Reseul</Company>
     <Product>Azure Voice Live API Client</Product>
     <Description>A .NET client library for Azure AI Foundry Voice Live API supporting both AI Model and AI Agent modes</Description>
     <PackageTags>Azure;AI;Voice;Live;API;WebSocket;RealTime;Conversation</PackageTags>
@@ -19,10 +19,19 @@
     <PackageLicenseExpression>BSL-1.0</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+    <ProduceReferenceAssembly>False</ProduceReferenceAssembly>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|netstandard2.0|AnyCPU'">
+    <WarningLevel>8</WarningLevel>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|netstandard2.0|AnyCPU'">
+    <WarningLevel>8</WarningLevel>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Identity" Version="1.14.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.8" />
     <PackageReference Include="System.Text.Json" Version="9.0.7" />
   </ItemGroup>
 

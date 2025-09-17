@@ -12,7 +12,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure.Core;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.Messages.InputAudioBuffers;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.Messages.Sessions;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Commons.Messages;
@@ -60,21 +59,6 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
     /// </summary>
     public abstract class VoiceLiveAPIClientBase : IDisposable
     {
-        /// <summary>
-        ///     Authentication methods supported by the VoiceInfo Live API client.
-        /// </summary>
-        public enum AuthenticationMethod
-        {
-            /// <summary>
-            ///     API key-based authentication.
-            /// </summary>
-            ApiKey,
-
-            /// <summary>
-            ///     Microsoft Entra ID (keyless) authentication.
-            /// </summary>
-            EntraId
-        }
 
         #region Constructor
 
@@ -139,25 +123,6 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
         /// </summary>
         public string ApiVersion { get; protected set; } = "2025-05-01-preview";
 
-        /// <summary>
-        ///     Gets the API key for authentication.
-        /// </summary>
-        public string ApiKey { get; protected set; } = string.Empty;
-
-        /// <summary>
-        ///     Gets the authentication method.
-        /// </summary>
-        public AuthenticationMethod AuthMethod { get; protected set; } = AuthenticationMethod.ApiKey;
-
-        /// <summary>
-        ///     Gets the token credential for Entra ID authentication.
-        /// </summary>
-        protected TokenCredential TokenCredential { get; set; } = null;
-
-        /// <summary>
-        ///     Gets the token request context for Entra ID authentication.
-        /// </summary>
-        protected TokenRequestContext RequestContext { get; set; }
 
         /// <summary>
         ///     Gets or sets the logger instance.
@@ -1196,7 +1161,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
                 var uri = BuildConnectionUri();
 
                 LogMessage($"Connecting to: {uri}");
-                LogMessage($"Auth Method: {AuthMethod}");
+                LogMessage("Auth Method: Token-based");
 
                 await WebSocket.ConnectAsync(new Uri(uri), CancellationTokenSource.Token);
 
