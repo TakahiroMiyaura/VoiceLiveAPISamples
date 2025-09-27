@@ -55,8 +55,38 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.Messages.Sessions
                     { type = "azure_deep_noise_suppression" },
                 voice = new Voice()
                 {
-                    name = "en-US-Aria:DragonHDLatestNeural",
+                    name = "en-US-AvaNeural",
                     type = "azure-standard"
+                },
+                output_audio_timestamp_types = new[] { "word" },
+                animation = new Animation()
+                {
+                    outputs = new []{ "viseme_id" }
+                },
+                avatar = new Avatar()
+                {
+                    character = "lisa",
+                    style = "casual-sitting",
+                    customized = false,
+                    video = new Video()
+                    {
+                        bitrate = 2000000,
+                        codec = "h264",
+                        crop = new Crop()
+                        {
+                            top_left = new[] { 560, 0 },
+                            bottom_right = new[] { 1360, 1080 }
+                        },
+                        resolution = new Resolution()
+                        {
+                            width = 1920,
+                            height = 1080
+                        },
+                        background = new Background()
+                        {
+                            color = "#FFFFFFFF"
+                        }
+                    }
                 }
             }
         };

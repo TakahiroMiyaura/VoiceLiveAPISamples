@@ -5,15 +5,16 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
+using System.Linq;
+using System.Net;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.Messages.InputAudioBuffers;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.Messages.Sessions;
+using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.Messages.Sessions.Avatars;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Commons.Messages;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handers.Unconfirmed;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handers.Unconfirmed.Conversations;
@@ -26,20 +27,24 @@ using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handlers.Conversations.It
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handlers.InputAudioBuffers;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handlers.OutputAudioBuffers;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handlers.Responses;
+using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handlers.Responses.Animations;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handlers.Responses.Audios;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handlers.Responses.AudioTranscripts;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handlers.Responses.ContentParts;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handlers.Responses.OutputItems;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handlers.Sessions;
+using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handlers.Sessions.Avatars;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message.Conversations.Items;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message.InputAudioBuffers;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message.Responses;
+using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message.Responses.Animations;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message.Responses.Audios;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message.Responses.AudioTranscripts;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message.Responses.ContentParts;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message.Responses.OutputItems;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message.Sessions;
+using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message.Sessions.Avatars;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Messages.Conversations.Items;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Messages.Unconfirmed;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Messages.Unconfirmed.Conversations;
@@ -49,9 +54,16 @@ using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Messages.Unconfirmed.Outp
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Messages.Unconfirmed.Responses.FunctionCallArguments;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Messages.Unconfirmed.Responses.Texts;
 using Microsoft.Extensions.Logging;
+using SIPSorcery.Net;
+using SIPSorceryMedia.Abstractions;
 
 namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
 {
+
+    /// <summary>
+    /// Avatar Video Frame Received delegate
+    /// </summary>
+    public delegate void VideoFrameReceivedDelegate(IPEndPoint remote, uint ssrc, byte[] frame, VideoFormat fmt);
 
     /// <summary>
     ///     Abstract base class for Azure AI VoiceInfo Live API clients.
@@ -109,9 +121,16 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
         /// </summary>
         protected string AccessToken;
 
+        private RTCPeerConnection pc;
+
         #endregion
 
         #region Public Properties
+
+        /// <summary>
+        /// Avatar Video Frame Received Event.
+        /// </summary>
+        public event VideoFrameReceivedDelegate OnVideoFrameReceived;
 
         /// <summary>
         ///     Gets the Azure AI endpoint URL.
@@ -128,15 +147,72 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
         ///     Gets or sets the logger instance.
         /// </summary>
         public ILogger Logger { get; set; } = null;
-
-        /// <summary>
-        ///     Gets or sets the audio sampling rate in Hz (default: 24000).
-        /// </summary>
-        public int SamplingRate { get; set; } = 24000;
-
+        
         #endregion
 
         #region Events
+
+        /// <summary>
+        ///     Event fired when a response animation viseme delta is received.
+        /// </summary>
+        public event Action<ResponseAnimationVisemeDelta> OnResponseAnimationVisemeDeltaReceived
+        {
+            add
+            {
+                if (messageHandlers.TryGetValue(ResponseAnimationVisemeDeltaHandler.EventType, out var handler))
+                {
+                    ((ResponseAnimationVisemeDeltaHandler)handler).OnProcessMessage += value;
+                }
+                else
+                {
+                    var h = new ResponseAnimationVisemeDeltaHandler();
+                    h.OnProcessMessage += value;
+                    RegisterMessageHandler(h);
+                }
+            }
+            remove
+            {
+                if (messageHandlers.TryGetValue(ResponseAnimationVisemeDeltaHandler.EventType, out var handler))
+                {
+                    ((ResponseAnimationVisemeDeltaHandler)handler).OnProcessMessage -= value;
+                }
+                else
+                {
+                    throw new InvalidOperationException("Handler not registered for ResponseAudioDeltaHandler.");
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Event fired when an response animation viseme done is received.
+        /// </summary>
+        public event Action<ResponseAnimationVisemeDone> OnResponseAnimationVisemeDoneReceived
+        {
+            add
+            {
+                if (messageHandlers.TryGetValue(ResponseAnimationVisemeDoneHandler.EventType, out var handler))
+                {
+                    ((ResponseAnimationVisemeDoneHandler)handler).OnProcessMessage += value;
+                }
+                else
+                {
+                    var h = new ResponseAnimationVisemeDoneHandler();
+                    h.OnProcessMessage += value;
+                    RegisterMessageHandler(h);
+                }
+            }
+            remove
+            {
+                if (messageHandlers.TryGetValue(ResponseAnimationVisemeDoneHandler.EventType, out var handler))
+                {
+                    ((ResponseAnimationVisemeDoneHandler)handler).OnProcessMessage -= value;
+                }
+                else
+                {
+                    throw new InvalidOperationException("Handler not registered for ResponseAudioDeltaHandler.");
+                }
+            }
+        }
 
         /// <summary>
         ///     Event fired when an audio delta response is received.
@@ -1115,6 +1191,37 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
         /// <summary>
         ///     Event fired when a session created message is processed.
         /// </summary>
+        public event Action<SessionAvatarConnecting> OnSessionAvatarConnecting
+        {
+            add
+            {
+                if (messageHandlers.TryGetValue(SessionAvatarConnectingHandler.EventType, out var handler))
+                {
+                    ((SessionAvatarConnectingHandler)handler).OnProcessMessage += value;
+                }
+                else
+                {
+                    var h = new SessionAvatarConnectingHandler();
+                    h.OnProcessMessage += value;
+                    RegisterMessageHandler(h);
+                }
+            }
+            remove
+            {
+                if (messageHandlers.TryGetValue(SessionAvatarConnectingHandler.EventType, out var handler))
+                {
+                    ((SessionAvatarConnectingHandler)handler).OnProcessMessage -= value;
+                }
+                else
+                {
+                    throw new InvalidOperationException("Handler not registered for SessionCreatedHandler.");
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Event fired when a session created message is processed.
+        /// </summary>
         public event Action<SessionCreated> OnSessionCreatedReceived
         {
             add
@@ -1187,7 +1294,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
             {
                 CancellationTokenSource.Cancel();
 
-                if (WebSocket.State == WebSocketState.Open)
+                if (WebSocket.State == System.Net.WebSockets.WebSocketState.Open)
                 {
                     await WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
                 }
@@ -1217,6 +1324,171 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
             while (AudioOutputQueue.TryDequeue(out _))
             {
             }
+        }
+
+        /// <inheritdoc />
+        public class LoggerProvider : ILoggerProvider
+        {
+            private readonly ILogger logger;
+
+            /// <summary>
+            /// 
+            /// </summary>
+            /// <param name="logger"></param>
+            public LoggerProvider(ILogger logger)
+            {
+                this.logger = logger;
+            }
+
+            /// <inheritdoc />
+            public ILogger CreateLogger(string categoryName)
+            {
+                return logger;
+            }
+
+            /// <inheritdoc />
+            public void Dispose()
+            {
+            }
+        }
+
+
+        /// <summary>
+        ///  Send avatar connect message.
+        /// </summary>
+        /// <param name="server"></param>
+        public async Task AvatarConnectAsync(IceServers server)
+        {
+            SIPSorcery.LogFactory.Set(LoggerFactory.Create(builder =>
+            {
+                builder.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
+                builder.AddProvider(new LoggerProvider(Logger));
+            }));
+            var cfg = new RTCConfiguration
+            {
+                iceServers = new List<RTCIceServer> {
+                    new RTCIceServer {
+                        urls = server.urls[0],
+                        username = server.username,
+                        credential = server.credential
+                    }
+                },
+                // DTLS 実装相性回避で RSA を使う（必要な環境で）
+                X_UseRsaForDtlsCertificate = false
+            };
+            pc = new RTCPeerConnection(cfg);
+
+            var h264 = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.video, 96, "H264/90000", "packetization-mode=1;profile-level-id=42e01f");
+            pc.addTrack(new MediaStreamTrack(
+                SDPMediaTypesEnum.video, /*isLocal*/ false,
+                new List<SDPAudioVideoMediaFormat> { h264 },
+                MediaStreamStatusEnum.RecvOnly));
+
+            pc.AcceptRtpFromAny = true;
+
+            var tcs = new TaskCompletionSource<bool>();
+            pc.onicegatheringstatechange += s => {
+                if (s == RTCIceGatheringState.complete) tcs.TrySetResult(true);
+            };
+
+            pc.createOffer(null);  
+            await tcs.Task;
+
+            var fullOffer = pc.createOffer(null);
+            await pc.setLocalDescription(fullOffer);
+            
+            SetLogProc();
+
+            var sdp = pc.localDescription.sdp.ToString();
+            sdp = sdp.Replace("UDP/TLS/RTP/SAVP", "UDP/TLS/RTP/SAVPF");
+            Logger.LogDebug(sdp);
+            sdp = sdp.Replace("\r", "\\r").Replace("\n", "\\n");
+            sdp = $"{{\"type\": \"offer\",\"sdp\": \"{sdp}\"}}";
+
+            var data = new SessionAvatarConnect()
+            {
+                client_sdp = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(sdp))
+            };
+            await data.SendAsync(this);
+        }
+
+        private void SetLogProc()
+        {
+            pc.OnRtpPacketReceived += (ep, kind, pkt) =>
+                Logger.LogDebug($"[Avatar][rtp] {kind} {ep} pt={pkt.Header.PayloadType} seq={pkt.Header.SequenceNumber}");
+            pc.OnVideoFrameReceived += (ep, ssrc, frame, fmt) =>
+                Logger.LogDebug($"[Avatar][frame] {fmt} bytes={(frame?.Length ?? 0)} ssrc={ssrc}");
+            pc.onconnectionstatechange += s => Console.WriteLine($"[pc] state={s}");
+            pc.GetRtpChannel().OnRTPDataReceived += (media, ep, data) =>
+            {
+                Logger.LogDebug($"[Avatar][RTP] {media} received from {ep},len={data.Length}");
+            };
+
+            pc.onconnectionstatechange += state =>
+            {
+                Logger.LogDebug("[Avatar][RTCPeerConnection] state = " + state);
+                if (state == RTCPeerConnectionState.connected)
+                {
+                    pc.Start();
+                }
+            };
+
+            pc.OnVideoFormatsNegotiated += formats =>
+            {
+                    var s = string.Join(", ", formats.Select(f => $"{f.Codec},{f.FormatID},{f.FormatName},{f.ClockRate},{f.Parameters}"));
+                    Logger.LogDebug("[Avatar][video] negotiated formats = " + s);
+            };
+
+            // RTP 受信（映像/音声どちらも）
+            pc.OnRtpPacketReceived += delegate (IPEndPoint remote, SDPMediaTypesEnum media, RTPPacket pkt)
+            {
+                var len = (pkt.Payload != null) ? pkt.Payload.Length : 0;
+                if (media == SDPMediaTypesEnum.video)
+                {
+                    Logger.LogDebug(
+                        string.Format("[Avatar][RTP][video] {0} pt={1} seq={2} ts={3} m={4} len={5}",
+                            remote, pkt.Header.PayloadType, pkt.Header.SequenceNumber,
+                            pkt.Header.Timestamp, pkt.Header.MarkerBit, len));
+                }
+                else if (media == SDPMediaTypesEnum.audio)
+                {
+                    Logger.LogDebug(
+                        string.Format("[Avatar][RTP][audio] {0} pt={1} seq={2} ts={3} len={4}",
+                            remote, pkt.Header.PayloadType, pkt.Header.SequenceNumber,
+                            pkt.Header.Timestamp, len));
+                }
+            };
+
+            // 再構成済み「映像フレーム」受信（エンコード済みフレーム単位）
+            pc.OnVideoFrameReceived += delegate (IPEndPoint remote, uint ssrc, byte[] frame, VideoFormat fmt)
+            {
+                OnVideoFrameReceived?.Invoke(remote,ssrc,frame,fmt);
+                var flen = (frame != null) ? frame.Length : 0;
+                var fmtStr = fmt.ToString();
+                Logger.LogDebug(
+                    string.Format("[Avatar][FRAME][video] {0} ssrc={1} format={2} bytes={3}",
+                        remote, ssrc, fmtStr, flen));
+            };
+
+            // メディア別のタイムアウト（一定時間受信なし）
+            pc.OnTimeout += media =>
+            {
+                Logger.LogDebug("[Avatar][timeout] " + media + " stream no packets for a while.");
+            };
+        }
+
+
+
+        public async Task AvatarConnectingAsync(String sdp)
+        {
+            var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(sdp);
+            var str = dict["sdp"].ToString()?.Replace("\\r\\n", "\r\n");
+            Logger.Log(Microsoft.Extensions.Logging.LogLevel.Information, str);
+            pc.setRemoteDescription(new RTCSessionDescriptionInit()
+            {
+                sdp = str,
+                type = RTCSdpType.answer
+            });
         }
 
         #endregion
@@ -1307,32 +1579,29 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
 
             try
             {
-                using (var writer = new StreamWriter(new FileStream("log.txt", FileMode.Append)))
+                while (WebSocket.State == System.Net.WebSockets.WebSocketState.Open &&
+                       !CancellationTokenSource.Token.IsCancellationRequested)
                 {
-                    while (WebSocket.State == WebSocketState.Open &&
-                           !CancellationTokenSource.Token.IsCancellationRequested)
+                    var result =
+                        await WebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationTokenSource.Token);
+
+                    if (result.MessageType == WebSocketMessageType.Text)
                     {
-                        var result =
-                            await WebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationTokenSource.Token);
+                        var messageChunk = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                        messageBuffer.Append(messageChunk);
 
-                        if (result.MessageType == WebSocketMessageType.Text)
+                        if (result.EndOfMessage)
                         {
-                            var messageChunk = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                            messageBuffer.Append(messageChunk);
+                            var completeMessage = messageBuffer.ToString();
+                            messageBuffer.Clear();
+                            Logger.LogDebug($"[{DateTime.Now:O} : {completeMessage}]");
 
-                            if (result.EndOfMessage)
-                            {
-                                var completeMessage = messageBuffer.ToString();
-                                messageBuffer.Clear();
-                                writer.WriteLine($"[{DateTime.Now:O} : {completeMessage}]");
-
-                                ProcessMessage(completeMessage);
-                            }
+                            ProcessMessage(completeMessage);
                         }
-                        else if (result.MessageType == WebSocketMessageType.Close)
-                        {
-                            break;
-                        }
+                    }
+                    else if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        break;
                     }
                 }
             }

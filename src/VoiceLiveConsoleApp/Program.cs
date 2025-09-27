@@ -2,17 +2,17 @@
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
-using System.Runtime.InteropServices;
-using System.Text.Json;
-using System.Xml.Linq;
-using Azure.Core;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients;
-using static Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.AuthenticationType;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.Messages.InputAudioBuffers;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.Messages.Sessions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NAudio.Wave;
+using System.IO;
+using System.Text;
+using System.Text.Json;
+using static Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.AuthenticationType;
+using static Org.BouncyCastle.Bcpg.Attr.ImageAttrib;
 
 namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI;
 
@@ -230,6 +230,8 @@ internal class Program
             default:
                 throw new ArgumentException($"Unsupported mode: {mode}");
         }
+        
+            client.Logger = logger;
     }
 
     private static int ChooseAuthMethod()
@@ -275,7 +277,6 @@ internal class Program
             // Reconnect
             Console.WriteLine($"Reconnecting in {newMode} mode...");
             await client.ConnectAsync(ClientSessionUpdate.Default);
-
             StartRecording();
 
             Console.WriteLine("Mode switched successfully!");
@@ -307,9 +308,14 @@ internal class Program
         waveOut.Init(waveProvider);
     }
 
-
     private static void SetupClientEvents()
     {
+
+        client.OnVideoFrameReceived += (response, ssrc, frame, formart) =>
+        {
+            logger?.Log(LogLevel.Information, $" type : {formart.Codec}/{formart.ClockRate},frame {frame.Length} bytes.");
+
+        };
         client.OnAudioDeltaReceived += response =>
         {
 
@@ -329,7 +335,23 @@ internal class Program
         client.OnSessionUpdateReceived += sessionUpdate =>
         {
             logger?.Log(LogLevel.Information, $" type : {sessionUpdate.type}");
+
+            if (sessionUpdate.session.avatar != null)
+            {
+                var ics = sessionUpdate.session.avatar.ice_servers[0];
+
+                client.AvatarConnectAsync(ics);
+            }
+
             StartRecording();
+
+        };
+
+        client.OnSessionAvatarConnecting += connecting =>
+        {
+
+            logger?.Log(LogLevel.Information, $" type : {connecting.type}");
+            client.AvatarConnectingAsync(connecting.server_sdp);
         };
 
 
@@ -361,6 +383,8 @@ internal class Program
         client.OnOutputAudioBufferStartedReceived += response => { logger?.Log(LogLevel.Information, $" received: {response.type}"); };
         client.OnOutputAudioBufferStoppedReceived += response => { logger?.Log(LogLevel.Information, $" received: {response.type}"); };
         client.OnRateLimitsUpdatedReceived += response => { logger?.Log(LogLevel.Information, $" received: {response.type}"); };
+        client.OnResponseAnimationVisemeDoneReceived += response => { logger?.Log(LogLevel.Information, $" received: {response.type}"); };
+        client.OnResponseAnimationVisemeDeltaReceived += response => { logger?.Log(LogLevel.Information, $" received: {response.type}"); };
         client.OnResponseAudioDoneReceived += response => { logger?.Log(LogLevel.Information, $" received: {response.type}"); };
         client.OnResponseAudioTranscriptDeltaReceived += response =>
         {
