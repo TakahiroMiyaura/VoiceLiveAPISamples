@@ -15,21 +15,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
     /// </summary>
     public class AIAgentClient : VoiceLiveAPIClientBase
     {
-        #region Public Methods
-
-        /// <summary>
-        ///     Establishes a WebSocket connection to the VoiceInfo Live API in AI Agent mode.
-        /// </summary>
-        /// <returns>A task representing the asynchronous connect operation.</returns>
-        public override async Task ConnectAsync(ClientSessionUpdate sessionUpdated)
-        {
-            LogMessage($"Connecting to AI Agent - Project: {ProjectName}, Agent: {AgentId}");
-            await base.ConnectAsync(sessionUpdated);
-        }
-
-        #endregion
-
-        #region Public Properties
+        #region Properties, Indexers
 
         /// <summary>
         ///     Gets the AI Foundry project name.
@@ -79,7 +65,21 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
 
         #endregion
 
-        #region Protected Methods
+        #region Public methods
+
+        /// <summary>
+        ///     Establishes a WebSocket connection to the VoiceInfo Live API in AI Agent mode.
+        /// </summary>
+        /// <returns>A task representing the asynchronous connect operation.</returns>
+        public override async Task ConnectAsync(ClientSessionUpdate sessionUpdated)
+        {
+            LogMessage($"Connecting to AI Agent - Project: {ProjectName}, Agent: {AgentId}");
+            await base.ConnectAsync(sessionUpdated);
+        }
+
+        #endregion
+
+        #region Protected methods
 
         /// <summary>
         ///     Builds the WebSocket connection URI for AI Agent mode.

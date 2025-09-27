@@ -13,10 +13,16 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
     /// </summary>
     public interface IVoiceLiveHandler
     {
+        #region Properties, Indexers
+
         /// <summary>
         ///     Gets the type of message this handler can process.
         /// </summary>
         string MessageType { get; }
+
+        #endregion
+
+        #region Public methods
 
         /// <summary>
         ///     Determines whether this handler can process a specific message type.
@@ -31,5 +37,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
         /// <param name="message">The JSON element representing the message.</param>
         /// <returns>A task representing the asynchronous operation.</returns>
         Task HandleAsync(JsonElement message);
+
+        #endregion
     }
 }

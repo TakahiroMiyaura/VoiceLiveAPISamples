@@ -11,30 +11,45 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handlers.Responses.Ou
 {
 
     /// <summary>
-    ///     Handles response output Item added messages.
+    ///     Handles response output item added messages.
     /// </summary>
     public class ResponseOutputItemAddedHandler : VoiceLiveHandlerBase<ResponseOutputItemAdded>
     {
+        #region Static Fields and Constants
+
         /// <summary>
-        ///     Gets the event type for response output Item added.
+        ///     Gets the event type for response output item added.
         /// </summary>
         public static string EventType = ResponseOutputItemAdded.Type;
+
+        #endregion
+
+        #region Events
+
+        /// <summary>
+        ///     Occurs when a response output item added message is processed.
+        /// </summary>
+        public override event Action<ResponseOutputItemAdded> OnProcessMessage = null;
+
+        #endregion
+
+        #region Properties, Indexers
 
         /// <summary>
         ///     Gets the message type this handler can process.
         /// </summary>
         public override string MessageType => EventType;
 
-        /// <summary>
-        ///     Occurs when a response output Item added message is processed.
-        /// </summary>
-        public override event Action<ResponseOutputItemAdded> OnProcessMessage = null;
+        #endregion
+
+        #region Public methods
 
         /// <summary>
-        ///     Handles the response output Item added message asynchronously.
+        ///     Handles the response output item added message asynchronously.
         /// </summary>
         /// <param name="message">The JSON message to handle.</param>
         /// <returns>A task that represents the asynchronous operation.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when deserialization fails for the response output item added message.</exception>
         public override async Task HandleAsync(JsonElement message)
         {
             var json = message.Deserialize<ResponseOutputItemAdded>();
@@ -43,5 +58,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handlers.Responses.Ou
             OnProcessMessage?.Invoke(json);
             await Task.CompletedTask;
         }
+
+        #endregion
     }
 }

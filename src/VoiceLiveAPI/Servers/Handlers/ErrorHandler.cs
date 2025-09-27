@@ -15,26 +15,41 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handlers
     /// </summary>
     public class ErrorHandler : VoiceLiveHandlerBase<Error>
     {
+        #region Static Fields and Constants
+
         /// <summary>
         ///     Gets the event type for error.
         /// </summary>
         public static string EventType = Error.Type;
 
-        /// <summary>
-        ///     Gets the message type this handler can process.
-        /// </summary>
-        public override string MessageType => EventType;
+        #endregion
+
+        #region Events
 
         /// <summary>
         ///     Occurs when an error message is processed.
         /// </summary>
         public override event Action<Error> OnProcessMessage = null;
 
+        #endregion
+
+        #region Properties, Indexers
+
+        /// <summary>
+        ///     Gets the message type this handler can process.
+        /// </summary>
+        public override string MessageType => EventType;
+
+        #endregion
+
+        #region Public methods
+
         /// <summary>
         ///     Handles the error message asynchronously.
         /// </summary>
         /// <param name="message">The JSON message to handle.</param>
         /// <returns>A task that represents the asynchronous operation.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when deserialization fails for the error message.</exception>
         public override async Task HandleAsync(JsonElement message)
         {
             var json = message.Deserialize<Error>();
@@ -43,5 +58,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Handlers
             OnProcessMessage?.Invoke(json);
             await Task.CompletedTask;
         }
+
+        #endregion
     }
 }

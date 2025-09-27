@@ -15,10 +15,25 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
     /// <typeparam name="T">The type of the message that this handler processes.</typeparam>
     public abstract class VoiceLiveHandlerBase<T> : IVoiceLiveHandler
     {
+        #region Events
+
+        /// <summary>
+        ///     Event triggered when a message of type <typeparamref name="T" /> is processed.
+        /// </summary>
+        public abstract event Action<T> OnProcessMessage;
+
+        #endregion
+
+        #region Properties, Indexers
+
         /// <summary>
         ///     Gets the type of the message that this handler can process.
         /// </summary>
         public abstract string MessageType { get; }
+
+        #endregion
+
+        #region Public methods
 
         /// <summary>
         ///     Determines whether the handler can process a message of the specified type.
@@ -37,9 +52,6 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
         /// <returns>A <see cref="Task" /> representing the asynchronous operation.</returns>
         public abstract Task HandleAsync(JsonElement message);
 
-        /// <summary>
-        ///     Event triggered when a message of type <typeparamref name="T" /> is processed.
-        /// </summary>
-        public abstract event Action<T> OnProcessMessage;
+        #endregion
     }
 }

@@ -72,85 +72,12 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
     public abstract class VoiceLiveAPIClientBase : IDisposable
     {
 
-        #region Constructor
-
-        /// <summary>
-        ///     Initializes a new instance of the VoiceLiveAPIClientBase.
-        /// </summary>
-        protected VoiceLiveAPIClientBase()
-        {
-            WebSocket = new ClientWebSocket();
-            CancellationTokenSource = new CancellationTokenSource();
-            ReceiveTask = Task.CompletedTask;
-            AccessToken = string.Empty;
-        }
-
-        #endregion
-
-
-        #region Private Fields
-
-        /// <summary>
-        ///     The WebSocket client used for communication.
-        /// </summary>
-        protected ClientWebSocket WebSocket;
-
-        /// <summary>
-        ///     The cancellation token source for managing task cancellation.
-        /// </summary>
-        protected CancellationTokenSource CancellationTokenSource;
-
-        /// <summary>
-        ///     A queue for storing audio output data.
-        /// </summary>
-        protected readonly ConcurrentQueue<byte[]> AudioOutputQueue = new ConcurrentQueue<byte[]>();
-
-        /// <summary>
-        ///     Dictionary for storing registered message handlers.
-        /// </summary>
-        private readonly Dictionary<string, IVoiceLiveHandler> messageHandlers =
-            new Dictionary<string, IVoiceLiveHandler>();
-
-        /// <summary>
-        ///     The task responsible for receiving data.
-        /// </summary>
-        protected Task ReceiveTask;
-
-        /// <summary>
-        ///     The access token used for authentication.
-        /// </summary>
-        protected string AccessToken;
-
-        private RTCPeerConnection pc;
-
-        #endregion
-
-        #region Public Properties
+        #region Events
 
         /// <summary>
         /// Avatar Video Frame Received Event.
         /// </summary>
         public event VideoFrameReceivedDelegate OnVideoFrameReceived;
-
-        /// <summary>
-        ///     Gets the Azure AI endpoint URL.
-        /// </summary>
-        public string Endpoint { get; protected set; } = string.Empty;
-
-        /// <summary>
-        ///     Gets the API version.
-        /// </summary>
-        public string ApiVersion { get; protected set; } = "2025-05-01-preview";
-
-
-        /// <summary>
-        ///     Gets or sets the logger instance.
-        /// </summary>
-        public ILogger Logger { get; set; } = null;
-        
-        #endregion
-
-        #region Events
 
         /// <summary>
         ///     Event fired when a response animation viseme delta is received.
@@ -309,7 +236,6 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
             }
         }
 
-        // Server Events
         /// <summary>
         ///     Event fired when a conversation created message is processed.
         /// </summary>
@@ -1252,6 +1178,77 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
 
         #endregion
 
+        #region Private Fields
+
+        /// <summary>
+        ///     The WebSocket client used for communication.
+        /// </summary>
+        protected ClientWebSocket WebSocket;
+
+        /// <summary>
+        ///     The cancellation token source for managing task cancellation.
+        /// </summary>
+        protected CancellationTokenSource CancellationTokenSource;
+
+        /// <summary>
+        ///     A queue for storing audio output data.
+        /// </summary>
+        protected readonly ConcurrentQueue<byte[]> AudioOutputQueue = new ConcurrentQueue<byte[]>();
+
+        /// <summary>
+        ///     Dictionary for storing registered message handlers.
+        /// </summary>
+        private readonly Dictionary<string, IVoiceLiveHandler> messageHandlers =
+            new Dictionary<string, IVoiceLiveHandler>();
+
+        /// <summary>
+        ///     The task responsible for receiving data.
+        /// </summary>
+        protected Task ReceiveTask;
+
+        /// <summary>
+        ///     The access token used for authentication.
+        /// </summary>
+        protected string AccessToken;
+
+        private RTCPeerConnection pc;
+
+        #endregion
+
+        #region Properties
+
+        /// <summary>
+        ///     Gets the Azure AI endpoint URL.
+        /// </summary>
+        public string Endpoint { get; protected set; } = string.Empty;
+
+        /// <summary>
+        ///     Gets the API version.
+        /// </summary>
+        public string ApiVersion { get; protected set; } = "2025-05-01-preview";
+
+        /// <summary>
+        ///     Gets or sets the logger instance.
+        /// </summary>
+        public ILogger Logger { get; set; } = null;
+        
+        #endregion
+
+        #region Constructor
+
+        /// <summary>
+        ///     Initializes a new instance of the VoiceLiveAPIClientBase.
+        /// </summary>
+        protected VoiceLiveAPIClientBase()
+        {
+            WebSocket = new ClientWebSocket();
+            CancellationTokenSource = new CancellationTokenSource();
+            ReceiveTask = Task.CompletedTask;
+            AccessToken = string.Empty;
+        }
+
+        #endregion
+
         #region Public Methods
 
         /// <summary>
@@ -1282,7 +1279,6 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
                 throw;
             }
         }
-
 
         /// <summary>
         ///     Disconnects from the VoiceInfo Live API and cleans up resources.
@@ -1326,33 +1322,6 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
             }
         }
 
-        /// <inheritdoc />
-        public class LoggerProvider : ILoggerProvider
-        {
-            private readonly ILogger logger;
-
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <param name="logger"></param>
-            public LoggerProvider(ILogger logger)
-            {
-                this.logger = logger;
-            }
-
-            /// <inheritdoc />
-            public ILogger CreateLogger(string categoryName)
-            {
-                return logger;
-            }
-
-            /// <inheritdoc />
-            public void Dispose()
-            {
-            }
-        }
-
-
         /// <summary>
         ///  Send avatar connect message.
         /// </summary>
@@ -1373,7 +1342,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
                         credential = server.credential
                     }
                 },
-                // DTLS ŽÀ‘•‘Š«‰ñ”ð‚Å RSA ‚ðŽg‚¤i•K—v‚ÈŠÂ‹«‚Åj
+                // DTLS ã‚»ã‚­ãƒ¥ãƒªãƒ†ã‚£ã®ãŸã‚ RSA æš—å·åŒ–ãŒå¿…è¦ãªå ´åˆ
                 X_UseRsaForDtlsCertificate = false
             };
             pc = new RTCPeerConnection(cfg);
@@ -1412,74 +1381,11 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
             await data.SendAsync(this);
         }
 
-        private void SetLogProc()
-        {
-            pc.OnRtpPacketReceived += (ep, kind, pkt) =>
-                Logger.LogDebug($"[Avatar][rtp] {kind} {ep} pt={pkt.Header.PayloadType} seq={pkt.Header.SequenceNumber}");
-            pc.OnVideoFrameReceived += (ep, ssrc, frame, fmt) =>
-                Logger.LogDebug($"[Avatar][frame] {fmt} bytes={(frame?.Length ?? 0)} ssrc={ssrc}");
-            pc.onconnectionstatechange += s => Console.WriteLine($"[pc] state={s}");
-            pc.GetRtpChannel().OnRTPDataReceived += (media, ep, data) =>
-            {
-                Logger.LogDebug($"[Avatar][RTP] {media} received from {ep},len={data.Length}");
-            };
-
-            pc.onconnectionstatechange += state =>
-            {
-                Logger.LogDebug("[Avatar][RTCPeerConnection] state = " + state);
-                if (state == RTCPeerConnectionState.connected)
-                {
-                    pc.Start();
-                }
-            };
-
-            pc.OnVideoFormatsNegotiated += formats =>
-            {
-                    var s = string.Join(", ", formats.Select(f => $"{f.Codec},{f.FormatID},{f.FormatName},{f.ClockRate},{f.Parameters}"));
-                    Logger.LogDebug("[Avatar][video] negotiated formats = " + s);
-            };
-
-            // RTP ŽóMi‰f‘œ/‰¹º‚Ç‚¿‚ç‚àj
-            pc.OnRtpPacketReceived += delegate (IPEndPoint remote, SDPMediaTypesEnum media, RTPPacket pkt)
-            {
-                var len = (pkt.Payload != null) ? pkt.Payload.Length : 0;
-                if (media == SDPMediaTypesEnum.video)
-                {
-                    Logger.LogDebug(
-                        string.Format("[Avatar][RTP][video] {0} pt={1} seq={2} ts={3} m={4} len={5}",
-                            remote, pkt.Header.PayloadType, pkt.Header.SequenceNumber,
-                            pkt.Header.Timestamp, pkt.Header.MarkerBit, len));
-                }
-                else if (media == SDPMediaTypesEnum.audio)
-                {
-                    Logger.LogDebug(
-                        string.Format("[Avatar][RTP][audio] {0} pt={1} seq={2} ts={3} len={4}",
-                            remote, pkt.Header.PayloadType, pkt.Header.SequenceNumber,
-                            pkt.Header.Timestamp, len));
-                }
-            };
-
-            // Ä\¬Ï‚Ýu‰f‘œƒtƒŒ[ƒ€vŽóMiƒGƒ“ƒR[ƒhÏ‚ÝƒtƒŒ[ƒ€’PˆÊj
-            pc.OnVideoFrameReceived += delegate (IPEndPoint remote, uint ssrc, byte[] frame, VideoFormat fmt)
-            {
-                OnVideoFrameReceived?.Invoke(remote,ssrc,frame,fmt);
-                var flen = (frame != null) ? frame.Length : 0;
-                var fmtStr = fmt.ToString();
-                Logger.LogDebug(
-                    string.Format("[Avatar][FRAME][video] {0} ssrc={1} format={2} bytes={3}",
-                        remote, ssrc, fmtStr, flen));
-            };
-
-            // ƒƒfƒBƒA•Ê‚Ìƒ^ƒCƒ€ƒAƒEƒgiˆê’èŽžŠÔŽóM‚È‚µj
-            pc.OnTimeout += media =>
-            {
-                Logger.LogDebug("[Avatar][timeout] " + media + " stream no packets for a while.");
-            };
-        }
-
-
-
-        public async Task AvatarConnectingAsync(String sdp)
+        /// <summary>
+        ///     Handles avatar connecting message by setting remote SDP description.
+        /// </summary>
+        /// <param name="sdp">The SDP message to process.</param>
+        public void AvatarConnecting(String sdp)
         {
             var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(sdp);
             var str = dict["sdp"].ToString()?.Replace("\\r\\n", "\r\n");
@@ -1507,6 +1413,10 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
         /// <returns>A task representing the asynchronous authentication setup.</returns>
         protected abstract Task SetupAuthenticationAsync();
 
+        #endregion
+
+        #region Protected Methods
+
         /// <summary>
         ///     Registers a message handler for a specific message type.
         /// </summary>
@@ -1516,10 +1426,6 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
             messageHandlers[handler.MessageType] = handler;
             LogMessage($"Registered handler for message type: {handler.MessageType}");
         }
-
-        #endregion
-
-        #region Protected Methods
 
         /// <summary>
         ///     Logs a message for debugging or informational purposes.
@@ -1647,6 +1553,71 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
             }
         }
 
+        private void SetLogProc()
+        {
+            pc.OnRtpPacketReceived += (ep, kind, pkt) =>
+                Logger.LogDebug($"[Avatar][rtp] {kind} {ep} pt={pkt.Header.PayloadType} seq={pkt.Header.SequenceNumber}");
+            pc.OnVideoFrameReceived += (ep, ssrc, frame, fmt) =>
+                Logger.LogDebug($"[Avatar][frame] {fmt} bytes={(frame?.Length ?? 0)} ssrc={ssrc}");
+            pc.onconnectionstatechange += s => Console.WriteLine($"[pc] state={s}");
+            pc.GetRtpChannel().OnRTPDataReceived += (media, ep, data) =>
+            {
+                Logger.LogDebug($"[Avatar][RTP] {media} received from {ep},len={data.Length}");
+            };
+
+            pc.onconnectionstatechange += state =>
+            {
+                Logger.LogDebug("[Avatar][RTCPeerConnection] state = " + state);
+                if (state == RTCPeerConnectionState.connected)
+                {
+                    pc.Start();
+                }
+            };
+
+            pc.OnVideoFormatsNegotiated += formats =>
+            {
+                    var s = string.Join(", ", formats.Select(f => $"{f.Codec},{f.FormatID},{f.FormatName},{f.ClockRate},{f.Parameters}"));
+                    Logger.LogDebug("[Avatar][video] negotiated formats = " + s);
+            };
+
+            // RTP é€šä¿¡ï¼ˆãƒ¡ãƒ‡ã‚£ã‚¢/ã‚³ãƒ¼ãƒ‡ãƒƒã‚¯ã®ç¨®é¡žï¼‰
+            pc.OnRtpPacketReceived += delegate (IPEndPoint remote, SDPMediaTypesEnum media, RTPPacket pkt)
+            {
+                var len = (pkt.Payload != null) ? pkt.Payload.Length : 0;
+                if (media == SDPMediaTypesEnum.video)
+                {
+                    Logger.LogDebug(
+                        string.Format("[Avatar][RTP][video] {0} pt={1} seq={2} ts={3} m={4} len={5}",
+                            remote, pkt.Header.PayloadType, pkt.Header.SequenceNumber,
+                            pkt.Header.Timestamp, pkt.Header.MarkerBit, len));
+                }
+                else if (media == SDPMediaTypesEnum.audio)
+                {
+                    Logger.LogDebug(
+                        string.Format("[Avatar][RTP][audio] {0} pt={1} seq={2} ts={3} len={4}",
+                            remote, pkt.Header.PayloadType, pkt.Header.SequenceNumber,
+                            pkt.Header.Timestamp, len));
+                }
+            };
+
+            // å†æ§‹ç¯‰æ¸ˆã¿ã€Œãƒ¡ãƒ‡ã‚£ã‚¢ãƒ•ãƒ¬ãƒ¼ãƒ ã€å—ä¿¡ï¼ˆã‚¨ãƒ³ã‚³ãƒ¼ãƒ‰æ¸ˆã¿ãƒ•ãƒ¬ãƒ¼ãƒ å˜ä½ï¼‰
+            pc.OnVideoFrameReceived += delegate (IPEndPoint remote, uint ssrc, byte[] frame, VideoFormat fmt)
+            {
+                OnVideoFrameReceived?.Invoke(remote,ssrc,frame,fmt);
+                var flen = (frame != null) ? frame.Length : 0;
+                var fmtStr = fmt.ToString();
+                Logger.LogDebug(
+                    string.Format("[Avatar][FRAME][video] {0} ssrc={1} format={2} bytes={3}",
+                        remote, ssrc, fmtStr, flen));
+            };
+
+            // ãƒ¡ãƒ‡ã‚£ã‚¢åˆ¥ã®ã‚¿ã‚¤ãƒ ã‚¢ã‚¦ãƒˆï¼ˆä¸€å®šæ™‚é–“å—ä¿¡ãªã—ï¼‰
+            pc.OnTimeout += media =>
+            {
+                Logger.LogDebug("[Avatar][timeout] " + media + " stream no packets for a while.");
+            };
+        }
+
         #endregion
 
         #region IDisposable Implementation
@@ -1671,6 +1642,44 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
                 CancellationTokenSource.Cancel();
                 WebSocket.Dispose();
                 CancellationTokenSource.Dispose();
+            }
+        }
+
+        #endregion
+
+        #region Nested Types
+
+        /// <summary>
+        ///     Logger provider implementation for integrating with the SIPSorcery library.
+        /// </summary>
+        public class LoggerProvider : ILoggerProvider
+        {
+            private readonly ILogger logger;
+
+            /// <summary>
+            ///     Initializes a new instance of the LoggerProvider class.
+            /// </summary>
+            /// <param name="logger">The logger instance to wrap.</param>
+            public LoggerProvider(ILogger logger)
+            {
+                this.logger = logger;
+            }
+
+            /// <summary>
+            ///     Creates a logger for the specified category.
+            /// </summary>
+            /// <param name="categoryName">The category name for the logger.</param>
+            /// <returns>The logger instance.</returns>
+            public ILogger CreateLogger(string categoryName)
+            {
+                return logger;
+            }
+
+            /// <summary>
+            ///     Disposes the logger provider.
+            /// </summary>
+            public void Dispose()
+            {
             }
         }
 

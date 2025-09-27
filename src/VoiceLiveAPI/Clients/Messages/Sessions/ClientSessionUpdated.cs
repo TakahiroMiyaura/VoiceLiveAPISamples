@@ -63,31 +63,31 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.Messages.Sessions
                 {
                     outputs = new []{ "viseme_id" }
                 },
-                avatar = new Avatar()
-                {
-                    character = "lisa",
-                    style = "casual-sitting",
-                    customized = false,
-                    video = new Video()
-                    {
-                        bitrate = 2000000,
-                        codec = "h264",
-                        crop = new Crop()
-                        {
-                            top_left = new[] { 560, 0 },
-                            bottom_right = new[] { 1360, 1080 }
-                        },
-                        resolution = new Resolution()
-                        {
-                            width = 1920,
-                            height = 1080
-                        },
-                        background = new Background()
-                        {
-                            color = "#FFFFFFFF"
-                        }
-                    }
-                }
+                //avatar = new Avatar()
+                //{
+                //    character = "lisa",
+                //    style = "casual-sitting",
+                //    customized = false,
+                //    video = new Video()
+                //    {
+                //        bitrate = 2000000,
+                //        codec = "h264",
+                //        crop = new Crop()
+                //        {
+                //            top_left = new []{560,0},
+                //            bottom_right = new[] { 1360, 1080 }
+                //        },
+                //        resolution = new Resolution()
+                //        {
+                //            width = 1920,
+                //            height = 1080
+                //        },
+                //        background = new Background()
+                //        {
+                //            color = "#00FF00FF"
+                //        }
+                //    }
+                //}
             }
         };
     }

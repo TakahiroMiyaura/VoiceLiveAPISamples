@@ -12,15 +12,25 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message
     /// </summary>  
     public class Error : MessageBase
     {
+        #region Static Fields and Constants
+
         /// <summary>  
         /// The type of the error message.  
         /// </summary>  
         public const string Type = "error";
 
+        #endregion
+
+        #region Public Fields
+
         /// <summary>  
         /// Gets or sets the details of the error.  
         /// </summary>  
         public ErrorDetail error { get; set; }
+
+        #endregion
+
+        #region Constructors
 
         /// <summary>  
         /// Initializes a new instance of the <see cref="Error"/> class.  
@@ -30,5 +40,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message
             type = Type;
             error = new ErrorDetail();
         }
+
+        #endregion
     }
 }

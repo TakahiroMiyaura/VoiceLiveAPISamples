@@ -15,6 +15,8 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
     /// </summary>
     public static class AuthenticationHelper
     {
+        #region Public Enums
+
         /// <summary>
         ///     Authentication methods supported by the console application.
         /// </summary>
@@ -30,6 +32,10 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
             /// </summary>
             EntraId
         }
+
+        #endregion
+
+        #region Public methods
 
         /// <summary>
         ///     Gets an access token using API key authentication.
@@ -86,5 +92,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                 _ => throw new ArgumentException($"Unsupported authentication method: {authMethod}")
             };
         }
+
+        #endregion
     }
 }

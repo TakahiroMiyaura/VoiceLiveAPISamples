@@ -10,6 +10,8 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message
     /// </summary>  
     public class MessageBase
     {
+        #region Public Fields
+
         /// <summary>  
         /// Gets or sets the unique identifier for the event.  
         /// </summary>  
@@ -19,5 +21,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Servers.Message
         /// Gets or sets the type of the message.  
         /// </summary>  
         public string type { get; set; } = null;
+
+        #endregion
     }
 }

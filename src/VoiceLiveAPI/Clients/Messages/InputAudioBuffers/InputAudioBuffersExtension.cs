@@ -1,36 +1,51 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿// Copyright (c) 2025 Takahiro Miyaura
+// Released under the Boost Software License 1.0
+// https://opensource.org/license/bsl-1-0
+
 using System.Threading.Tasks;
 
 namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.Messages.InputAudioBuffers
 {
     /// <summary>
-    /// 拡張メソッドを提供するクラス。
+    /// Provides extension methods for InputAudioBuffer operations.
+    /// Contains helper methods to simplify sending audio buffer messages.
     /// </summary>
     public static class InputAudioBuffersExtension
     {
+        #region Public Methods
+
         /// <summary>
-        /// 指定された <see cref="InputAudioBufferAppend"/> を非同期で送信します。
+        /// Sends the specified <see cref="InputAudioBufferAppend"/> asynchronously.
+        /// This extension method provides a convenient way to send audio buffer append messages.
         /// </summary>
-        /// <param name="inputAudioBufferAppend">送信する <see cref="InputAudioBufferAppend"/> オブジェクト。</param>
-        /// <param name="client">送信先の <see cref="VoiceLiveAPIClientBase"/> クライアント。</param>
+        /// <param name="inputAudioBufferAppend">The <see cref="InputAudioBufferAppend"/> object to send.</param>
+        /// <param name="client">The <see cref="VoiceLiveAPIClientBase"/> client to send the message to.</param>
+        /// <returns>A task that represents the asynchronous send operation.</returns>
+        /// <exception cref="System.ArgumentNullException">
+        /// Thrown when <paramref name="inputAudioBufferAppend"/> or <paramref name="client"/> is null.
+        /// </exception>
         public static async Task SendAsync(this InputAudioBufferAppend inputAudioBufferAppend, VoiceLiveAPIClientBase client)
         {
             await client.SendServerAsync(inputAudioBufferAppend);
         }
 
         /// <summary>
-        /// 指定された音声データを <see cref="InputAudioBufferAppend"/> に設定し、非同期で送信します。
+        /// Sets the specified audio data to <see cref="InputAudioBufferAppend"/> and sends it asynchronously.
+        /// This overload converts the byte array to base64 format before sending.
         /// </summary>
-        /// <param name="inputACudioBufferAppend">送信する <see cref="InputAudioBufferAppend"/> オブジェクト。</param>
-        /// <param name="audioData">送信する音声データ。</param>
-        /// <param name="client">送信先の <see cref="VoiceLiveAPIClientBase"/> クライアント。</param>
-        public static async Task SendAsync(this InputAudioBufferAppend inputACudioBufferAppend, byte[] audioData, VoiceLiveAPIClientBase client)
+        /// <param name="inputAudioBufferAppend">The <see cref="InputAudioBufferAppend"/> object to send.</param>
+        /// <param name="audioData">The audio data as a byte array to convert and send.</param>
+        /// <param name="client">The <see cref="VoiceLiveAPIClientBase"/> client to send the message to.</param>
+        /// <returns>A task that represents the asynchronous send operation.</returns>
+        /// <exception cref="System.ArgumentNullException">
+        /// Thrown when <paramref name="inputAudioBufferAppend"/>, <paramref name="audioData"/>, or <paramref name="client"/> is null.
+        /// </exception>
+        public static async Task SendAsync(this InputAudioBufferAppend inputAudioBufferAppend, byte[] audioData, VoiceLiveAPIClientBase client)
         {
-            inputACudioBufferAppend.audio = InputAudioBufferAppend.ConvertToBase64(audioData);
-            await client.SendServerAsync(inputACudioBufferAppend);
+            inputAudioBufferAppend.audio = InputAudioBufferAppend.ConvertToBase64(audioData);
+            await client.SendServerAsync(inputAudioBufferAppend);
         }
+
+        #endregion
     }
 }

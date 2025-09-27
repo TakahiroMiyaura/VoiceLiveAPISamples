@@ -2,32 +2,52 @@
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
+using System.Text.Json;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients;
+using static Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.AuthenticationType;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.Messages.InputAudioBuffers;
 using Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.Messages.Sessions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NAudio.Wave;
-using System.IO;
-using System.Text;
-using System.Text.Json;
-using static Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients.AuthenticationType;
-using static Org.BouncyCastle.Bcpg.Attr.ImageAttrib;
 
 namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI;
 
+/// <summary>
+/// Simple test logger implementation for console output.
+/// </summary>
 public class Test : ILogger
 {
+    /// <summary>
+    /// Logs a message to the console.
+    /// </summary>
+    /// <typeparam name="TState">The type of the state.</typeparam>
+    /// <param name="logLevel">The log level.</param>
+    /// <param name="eventId">The event ID.</param>
+    /// <param name="state">The state object.</param>
+    /// <param name="exception">The exception.</param>
+    /// <param name="formatter">The formatter function.</param>
     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
     {
         Console.WriteLine($"[{logLevel}] {formatter(state, exception)}");
     }
 
+    /// <summary>
+    /// Determines if the given log level is enabled.
+    /// </summary>
+    /// <param name="logLevel">The log level to check.</param>
+    /// <returns>Always returns true.</returns>
     public bool IsEnabled(LogLevel logLevel)
     {
         return true;
     }
 
+    /// <summary>
+    /// Begins a logical operation scope.
+    /// </summary>
+    /// <typeparam name="TState">The type of the state.</typeparam>
+    /// <param name="state">The state object.</param>
+    /// <returns>Always returns null.</returns>
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull
     {
         return null;
@@ -35,44 +55,118 @@ public class Test : ILogger
 }
 
 /// <summary>
-///     Specifies the connection mode for the VoiceInfo Live API client.
+/// Specifies the connection mode for the VoiceInfo Live API client.
 /// </summary>
 public enum ConnectionMode
 {
     /// <summary>
-    ///     Direct connection to AI models (e.g., GPT-4o).
+    /// Direct connection to AI models (e.g., GPT-4o).
     /// </summary>
     AIModel,
 
     /// <summary>
-    ///     Connection to custom AI agents.
+    /// Connection to custom AI agents.
     /// </summary>
     AIAgent
 }
 
+/// <summary>
+/// Main console application class for the VoiceLive API sample application.
+/// Provides interactive voice communication with Azure AI services.
+/// </summary>
 internal class Program
 {
+    #region Static Fields and Constants
 
+    /// <summary>
+    /// Audio sample rate in Hz.
+    /// </summary>
     private const int SampleRate = 24000;
+
+    /// <summary>
+    /// Number of audio channels.
+    /// </summary>
     private const int Channels = 1;
+
+    /// <summary>
+    /// Bits per audio sample.
+    /// </summary>
     private const int BitsPerSample = 16;
+
+    /// <summary>
+    /// The VoiceLive API client instance.
+    /// </summary>
     private static VoiceLiveAPIClientBase client = null!;
+
+    /// <summary>
+    /// Audio input device for recording.
+    /// </summary>
     private static WaveInEvent waveIn = null!;
+
+    /// <summary>
+    /// Audio output device for playback.
+    /// </summary>
     private static WaveOutEvent waveOut = null!;
+
+    /// <summary>
+    /// Buffered wave provider for audio playback.
+    /// </summary>
     private static BufferedWaveProvider waveProvider = null!;
+
+    /// <summary>
+    /// Flag indicating if recording is active.
+    /// </summary>
     private static bool isRecording;
+
+    /// <summary>
+    /// Flag indicating if playback is active.
+    /// </summary>
     private static bool isPlaying;
+
+    /// <summary>
+    /// Logger instance for application logging.
+    /// </summary>
     private static ILogger? logger = new Test();
 
+    /// <summary>
+    /// Azure AI Services endpoint URL.
+    /// </summary>
     private static string azureEndpoint = "<your Azure AI Services Endpoint>";
+
+    /// <summary>
+    /// Azure AI Foundry project name for agent mode.
+    /// </summary>
     private static string agentProjectName = "<your Azure AI Foundry Project Name>";
+
+    /// <summary>
+    /// Azure AI agent identifier for agent mode.
+    /// </summary>
     private static string agentId = "<your Azure AI Agent Id>";
+
+    /// <summary>
+    /// Token request URL for Azure Identity authentication.
+    /// </summary>
     private static string azureIdentityTokenRequestUrl = "<Token request url(ex:https://ai.azure.com/.default)>";
 
+    /// <summary>
+    /// Azure AI Foundry API key for authentication.
+    /// </summary>
     private static string apiKey = "<Azure AI Foundry API Key>";
 
+    /// <summary>
+    /// Access token for agent authentication.
+    /// </summary>
     private static string agentAccessToken = "<Azure AI Foundry API Key>";
 
+    #endregion
+
+    #region Public Methods
+
+    /// <summary>
+    /// Main entry point of the console application.
+    /// </summary>
+    /// <param name="args">Command-line arguments.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private static async Task Main(string[] args)
     {
         var config = new ConfigurationBuilder()
@@ -156,6 +250,14 @@ internal class Program
         }
     }
 
+    #endregion
+
+    #region Private Methods
+
+    /// <summary>
+    /// Prompts the user to choose a connection mode.
+    /// </summary>
+    /// <returns>The selected connection mode.</returns>
     private static ConnectionMode ChooseConnectionMode()
     {
         Console.WriteLine("Choose connection mode:");
@@ -183,6 +285,11 @@ internal class Program
         }
     }
 
+    /// <summary>
+    /// Initializes the VoiceLive API client based on the specified mode.
+    /// </summary>
+    /// <param name="mode">The connection mode to use.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private static async Task InitializeClientAsync(ConnectionMode mode)
     {
         Console.WriteLine("Choose authentication method:");
@@ -234,6 +341,10 @@ internal class Program
             client.Logger = logger;
     }
 
+    /// <summary>
+    /// Prompts the user to choose an authentication method.
+    /// </summary>
+    /// <returns>The selected authentication method (1 for API Key, 2 for Entra ID).</returns>
     private static int ChooseAuthMethod()
     {
         while (true)
@@ -254,6 +365,10 @@ internal class Program
         }
     }
 
+    /// <summary>
+    /// Switches the connection mode and reinitializes the client.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private static async Task SwitchMode()
     {
         try
@@ -287,6 +402,9 @@ internal class Program
         }
     }
 
+    /// <summary>
+    /// Initializes audio input and output components.
+    /// </summary>
     private static void InitializeAudio()
     {
         // Setup audio input (microphone)
@@ -308,14 +426,11 @@ internal class Program
         waveOut.Init(waveProvider);
     }
 
+    /// <summary>
+    /// Sets up event handlers for the VoiceLive API client.
+    /// </summary>
     private static void SetupClientEvents()
     {
-
-        client.OnVideoFrameReceived += (response, ssrc, frame, formart) =>
-        {
-            logger?.Log(LogLevel.Information, $" type : {formart.Codec}/{formart.ClockRate},frame {frame.Length} bytes.");
-
-        };
         client.OnAudioDeltaReceived += response =>
         {
 
@@ -339,8 +454,9 @@ internal class Program
             if (sessionUpdate.session.avatar != null)
             {
                 var ics = sessionUpdate.session.avatar.ice_servers[0];
-
+#pragma warning disable CS4014
                 client.AvatarConnectAsync(ics);
+#pragma warning restore CS4014
             }
 
             StartRecording();
@@ -351,7 +467,7 @@ internal class Program
         {
 
             logger?.Log(LogLevel.Information, $" type : {connecting.type}");
-            client.AvatarConnectingAsync(connecting.server_sdp);
+            client.AvatarConnecting(connecting.server_sdp);
         };
 
 
@@ -417,6 +533,11 @@ internal class Program
         client.OnSessionCreatedReceived += response => { logger?.Log(LogLevel.Information, $" received: {response.type}"); };
     }
 
+    /// <summary>
+    /// Handles audio data available events from the microphone.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The wave input event arguments.</param>
     private static async void OnAudioDataAvailable(object? sender, WaveInEventArgs e)
     {
         if (client != null && isRecording && e.BytesRecorded > 0)
@@ -437,6 +558,11 @@ internal class Program
         }
     }
 
+    /// <summary>
+    /// Handles recording stopped events.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The stopped event arguments.</param>
     private static void OnRecordingStopped(object? sender, StoppedEventArgs e)
     {
         Console.WriteLine(" Recording stopped");
@@ -446,6 +572,9 @@ internal class Program
         }
     }
 
+    /// <summary>
+    /// Starts audio recording from the microphone.
+    /// </summary>
     private static void StartRecording()
     {
         if (!isRecording)
@@ -468,6 +597,9 @@ internal class Program
         }
     }
 
+    /// <summary>
+    /// Stops audio recording from the microphone.
+    /// </summary>
     private static void StopRecording()
     {
         if (isRecording)
@@ -485,6 +617,9 @@ internal class Program
         }
     }
 
+    /// <summary>
+    /// Starts audio playback to the speakers.
+    /// </summary>
     private static void StartPlayback()
     {
         if (!isPlaying)
@@ -507,6 +642,9 @@ internal class Program
         }
     }
 
+    /// <summary>
+    /// Stops audio playback to the speakers.
+    /// </summary>
     private static void StopPlayback()
     {
         if (isPlaying)
@@ -524,6 +662,9 @@ internal class Program
         }
     }
 
+    /// <summary>
+    /// Toggles audio recording on or off.
+    /// </summary>
     private static void ToggleRecording()
     {
         if (isRecording)
@@ -536,6 +677,9 @@ internal class Program
         }
     }
 
+    /// <summary>
+    /// Toggles audio playback on or off.
+    /// </summary>
     private static void TogglePlayback()
     {
         if (isPlaying)
@@ -548,6 +692,9 @@ internal class Program
         }
     }
 
+    /// <summary>
+    /// Clears the audio queue in the VoiceLive API client.
+    /// </summary>
     private static void ClearAudioQueue()
     {
         if (client != null)
@@ -562,6 +709,9 @@ internal class Program
         }
     }
 
+    /// <summary>
+    /// Shows the current status of the application and audio components.
+    /// </summary>
     private static void ShowStatus()
     {
         Console.WriteLine("\n=== Current Status ===");
@@ -599,6 +749,10 @@ internal class Program
         Console.WriteLine("=====================\n");
     }
 
+    /// <summary>
+    /// Performs cleanup operations before application exit.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private static async Task Cleanup()
     {
         Console.WriteLine("Cleaning up...");
@@ -618,4 +772,6 @@ internal class Program
 
         Console.WriteLine("Goodbye!");
     }
+
+    #endregion
 }

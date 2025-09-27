@@ -23,13 +23,14 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
         /// </summary>
         BearerToken
     }
+
     /// <summary>
     ///     Azure AI Foundry VoiceInfo Live API client for AI Model mode.
     ///     Provides direct connection to AI models (e.g., GPT-4o) with real-time audio communication.
     /// </summary>
     public class AIModelClient : VoiceLiveAPIClientBase
     {
-        #region Public Properties
+        #region Properties, Indexers
 
         /// <summary>
         ///     Gets the AI model name.
@@ -40,20 +41,6 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
         ///     Gets the authentication type.
         /// </summary>
         public AuthenticationType AuthType { get; private set; }
-
-        #endregion
-
-        #region Public Methods
-
-        /// <summary>
-        ///     Establishes a WebSocket connection to the VoiceInfo Live API in AI Model mode.
-        /// </summary>
-        /// <returns>A task representing the asynchronous connect operation.</returns>
-        public override async Task ConnectAsync(ClientSessionUpdate sessionUpdated)
-        {
-            LogMessage($"Connecting to AI Model: {Model}");
-            await base.ConnectAsync(sessionUpdated);
-        }
 
         #endregion
 
@@ -79,7 +66,21 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI.Clients
 
         #endregion
 
-        #region Protected Methods
+        #region Public methods
+
+        /// <summary>
+        ///     Establishes a WebSocket connection to the VoiceInfo Live API in AI Model mode.
+        /// </summary>
+        /// <returns>A task representing the asynchronous connect operation.</returns>
+        public override async Task ConnectAsync(ClientSessionUpdate sessionUpdated)
+        {
+            LogMessage($"Connecting to AI Model: {Model}");
+            await base.ConnectAsync(sessionUpdated);
+        }
+
+        #endregion
+
+        #region Protected methods
 
         /// <summary>
         ///     Builds the WebSocket connection URI for AI Model mode.
