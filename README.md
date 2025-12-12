@@ -4,6 +4,8 @@
 
 A .NET 8 console application and reusable client library for real-time voice conversation with Azure AI Foundry's Voice Live API. Supports **AI Model mode**, **AI Agent mode**, and **Avatar mode** with microphone input, speaker output, and real-time video streaming.
 
+[![Foundry VoiceLiveAPI AvatarDemo](https://img.youtube.com/vi/lZ5fp42zWNs/0.jpg)](https://www.youtube.com/watch?v=lZ5fp42zWNs)
+
 ## 🌟 Features
 
 - **Triple Connection Modes**:
