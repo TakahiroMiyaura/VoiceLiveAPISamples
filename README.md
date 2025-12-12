@@ -1,52 +1,62 @@
 # Azure Voice Live API Console Application
 
-[![.NET Build and Test](https://github.com/TakahiroMiyaura/VoiceLiveAPISamples/actions/workflows/dotnet.yml/badge.svg)](https://github.com/TakahiroMiyaura/VoiceLiveAPISamples/actions/workflows/dotnet.yml)
-[![Release](https://github.com/TakahiroMiyaura/VoiceLiveAPISamples/actions/workflows/release.yml/badge.svg)](https://github.com/TakahiroMiyaura/VoiceLiveAPISamples/releases)
-[![NuGet Version](https://img.shields.io/nuget/v/Azure.VoiceLive.API)](https://www.nuget.org/packages/Azure.VoiceLive.API)
 [![License: BSL-1.0](https://img.shields.io/badge/License-BSL--1.0-blue.svg)](https://opensource.org/licenses/BSL-1.0)
 
-A .NET 8 console application and reusable client library for real-time voice conversation with Azure AI Foundry's Voice Live API. Supports both **AI Model mode** and **AI Agent mode** with microphone input and speaker output.
+A .NET 8 console application and reusable client library for real-time voice conversation with Azure AI Foundry's Voice Live API. Supports **AI Model mode**, **AI Agent mode**, and **Avatar mode** with microphone input, speaker output, and real-time video streaming.
 
 ## 🌟 Features
 
-- **Dual Connection Modes**:
+- **Triple Connection Modes**:
   - **AI Model Mode**: Direct connection to Azure AI models (GPT-4o, etc.)
   - **AI Agent Mode**: Connection to custom AI agents with specialized configurations
-- **Real-time Audio Processing**: Bidirectional audio streaming with low latency
-- **Voice Activity Detection**: Azure's semantic VAD for natural conversation flow
-- **Audio Enhancement**: Built-in noise suppression and echo cancellation
-- **Cross-Platform**: Windows, Linux, and macOS support
-- **Modular Design**: Reusable `VoiceLiveApiClient` class for integration
-- **Runtime Mode Switching**: Change between AI Model and AI Agent modes dynamically
+  - **Avatar Mode**: WebRTC video streaming with real-time H.264 video and Opus audio
 
 ## Required Packages
 
-| Package Name                                 | Version         |
-|----------------------------------------------|-----------------|
-| Microsoft.Extensions.Logging                | 9.0.8           |
-| NAudio                                       | 2.2.1           |
-| System.Text.Json                             | 9.0.7           |
-| Azure.Identity                               | 1.14.2          |
-| Microsoft.Extensions.Configuration           | 9.0.7           |
-| Microsoft.Extensions.Configuration.UserSecrets | 9.0.7        |
-
-
+| Package Name                                 | Version         | Purpose                    |
+|----------------------------------------------|-----------------|----------------------------|
+| Azure.Identity                               | 1.14.2          | Azure authentication       |
+| Microsoft.Extensions.Configuration           | 9.0.8           | Configuration management   |
+| Microsoft.Extensions.Configuration.UserSecrets | 9.0.8        | Secure configuration       |
+| Microsoft.Extensions.Logging                | 9.0.8           | Logging infrastructure     |
+| System.Text.Json                             | 9.0.8           | JSON serialization         |
+| NAudio                                       | 2.2.1           | Cross-platform audio      |
+| SIPSorcery                                   | 8.0.23          | WebRTC implementation      |
+| SIPSorceryMedia.Abstractions                | 8.0.12          | Media format abstractions |
+| Concentus                                    | 2.2.2           | Opus audio codec           |
+| FFMpegCore                                   | 5.1.0           | FFmpeg integration         |
+| CliWrap                                      | 3.6.6           | Command line process wrapper |
+### External Dependencies (Avatar Mode)
+- **FFmpeg**: Required for H.264 video processing and MPEGTS container generation
+- **FFplay**: Required for video playback and testing
 
 ## 🚀 Quick Start
 
-1. Access the Azure portal and add the following resources:
-* Azure AI Foundry & Project
-* Something AI Agent (optional, for AI Agent mode)
-   Make sure to note the **Project Endpoint** and **API KEY** if using AI Agent mode.
+### Prerequisites
 
-2. Clone the sample project.
+1. **FFmpeg Installation** (required for Avatar mode):
+   ```bash
+   # Download from https://ffmpeg.org/download.html
+   # Ensure ffmpeg and ffplay are in your PATH
+   ffmpeg -version
+   ffplay -version
+   ```
+
+2. **Azure Resources Setup**:
+   - Azure AI Foundry(Old version) & Project
+   - AI Agent (optional, for AI Agent mode)
+   - Note the **Project Endpoint** and **API KEY**
+
+### Installation
+
+1. Clone the sample project.
 
 ```powershell
 PS C:\hoge> git clone https://github.com/TakahiroMiyaura/VoiceLiveAPISamples.git
 PS C:\hoge> cd VoiceLiveAPISamples
 ```
 
-3. Register the Azure AI Foundry endpoint.
+2. Register the Azure AI Foundry endpoint.
 
 **When using only EntraID login (az login, etc.), ‘AzureAIFoundry:ApiKey’ is not required.**
 
@@ -60,42 +70,64 @@ PS D:\hoge\VoiceLiveAPISamples> dotnet user-secrets set "AzureAIFoundry:AgentAcc
 PS D:\hoge\VoiceLiveAPISamples> dotnet user-secrets set "AzureAIFoundry:ApiKey" "<Azure AI Foundry API Key>" --project src\VoiceLiveConsoleApp
 ```
 
-5. Build the console application.
+3. Build the console application.
 ```powershell
 PS D:\hoge\VoiceLiveAPISamples > dotnet build src\VoiceLiveConsoleApp
 ```
 
-6. Run the application.
+4. Run the application.
 ```powershell
-PS D:\hoge\VoiceLiveAPISamples > .\src\VoiceLiveConsoleApp\bin\Debug\net8.0\VoiceLiveConsoleApp.exe
+PS D:\hoge\VoiceLiveAPISamples > dotnet run --project src/VoiceLiveConsoleApp
 ```
 
 ## 💻 Usage
 
 ### Console Application
 
-Run the application and choose between AI Model or AI Agent mode:
+Run the application and choose between AI Model, AI Agent, or Avatar mode:
+
+> [!CAUTION]
+> The API key can only be used in AI Model Mode.
+> For AI Agent Mode and Avatar Mode, please use Entra ID authentication (DefaultAzureCredential).
+> Before using Entra ID authentication, ensure you have logged in using the Azure CLI (`az login`).
 
 ```
 Choose connection mode:
 1. AI Model Mode
-2. AI Agent Mode
+2. AI Agent Mode  
+3. Avatar Mode (with video streaming)
+Enter your choice (1, 2, or 3): 3
+
+Choose authentication method:
+1. API Key
+2. Entra ID (DefaultAzureCredential)
+Enter your choice (1 or 2): 2
 
 Commands:
-- Press 'R' to start/stop recording
+- Press 'R' to start/stop recording (auto-stops when speech ends)
 - Press 'P' to start/stop playback
 - Press 'M' to switch modes
+- Press 'C' to clear audio queue
+- Press 'S' to show detailed status
+- Press 'V' to toggle avatar video streaming (Avatar mode only)
+- Press 'F' to start FFplay (Avatar mode only)
+- Press 'T' to test connection and reconnect if needed
 - Press 'Q' to quit
+
+**Recording Auto-Stop**: Recording automatically stops when Azure AI detects your speech has ended. This prevents environmental noise from interrupting AI responses. You can still manually stop by pressing 'R' again.
 ```
 
-### Library Usage
+#### Avatar Mode Features
+- **Real-time Video**: H.264 video streaming with automatic SPS/PPS reconstruction
+- **Audio Integration**: Opus audio capture and MPEGTS multiplexing
+- **FFplay Integration**: Press 'F' to launch video playback
 
 #### AI Model Mode
 ```csharp
-using VoiceLiveAPI;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients;
 
-var client = new AIModelClient(endpoint, credentials);
-client.OnAudioDataReceived += (audioData) => {
+var client = new AIModelClient(token);
+client.OnResponseAudioDelta += (audioData) => {
     // Handle received audio
 };
 await client.ConnectAsync();
@@ -103,11 +135,31 @@ await client.ConnectAsync();
 
 #### AI Agent Mode
 ```csharp
-var client = new AIAgentClient(endpoint, credentials, agentConfig);
-client.OnAudioDataReceived += (audioData) => {
+var client = new AIAgentClient(token, agentProjectName, agentId);
+client.OnResponseAudioDelta += (audioData) => {
     // Handle received audio
 };
 await client.ConnectAsync();
+```
+
+#### Avatar Mode
+```csharp
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars;
+
+var avatarClient = new AvatarClient(token);
+var videoStreamer = new AvatarVideoStreamer(avatarClient, logger);
+
+// Subscribe to video/audio frames
+avatarClient.OnVideoFrameReceived += (remote, ssrc, frame, format) => {
+    // Handle H.264 video frames
+};
+avatarClient.OnAudioFrameReceived += (audioData) => {
+    // Handle Opus audio frames
+};
+
+// Start video streaming
+videoStreamer.StartStreaming();
+await avatarClient.ConnectAsync();
 ```
 
 ## 📖 API Reference
@@ -115,24 +167,34 @@ await client.ConnectAsync();
 ### Core Classes
 
 - `AIModelClient`: For direct AI model connections
-- `AIAgentClient`: For AI agent connections
+- `AIAgentClient`: For AI agent connections  
+- `AvatarClient`: For WebRTC video streaming connections
+- `AvatarVideoStreamer`: H.264 video and Opus audio processing
+- `H264StreamReconstructor`: SPS/PPS header injection for stream continuity
+- `H264StreamAnalyzer`: NAL unit analysis and debugging
 - `VoiceLiveHandlerBase`: Base handler for custom event processing
 
 ### Key Events
 
-- `OnAudioDataReceived`: Handles incoming audio data
-- `OnResponseReceived`: Handles text responses
+- `OnResponseAudioDelta`: Handles incoming audio data
+- `OnVideoFrameReceived`: Handles H.264 video frames (Avatar mode)
+- `OnAudioFrameReceived`: Handles Opus audio frames (Avatar mode)
 - `OnSessionCreated`: Handles session establishment
+
+### Avatar Processing Classes
+
+- `H264StreamAnalyzer`: NAL unit analysis and debugging
+- `AvatarMessageHandlerManager`: Avatar-specific message handling
 
 ## 📜 License
 
 This project is licensed under the Boost Software License 1.0 - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Knowledge
 
-- **Azure AI Foundry Team** - For the Voice Live API
-- **NAudio Contributors** - For cross-platform audio support
-- **Community Contributors** - For bug reports, feature requests, and improvements
+- [Microsoft Foundry documentation(Microsoft Learn)](https://learn.microsoft.com/ja-jp/azure/ai-foundry/?view=foundry-classic&wt.mc_id=WDIT-MVP-5003104)
+- [Quickstart: Create a voice live real-time voice agent with Microsoft Foundry Agent Service(Microsoft Learn)](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live-agents-quickstart?toc=%2Fazure%2Fai-foundry%2Ftoc.json&bc=%2Fazure%2Fai-foundry%2Fbreadcrumb%2Ftoc.json&view=foundry-classic&preserve-view=true&tabs=windows%2Ckeyless&pivots=ai-foundry-portal&wt.mc_id=WDIT-MVP-5003104)
+- [How to use the Voice live API(Microsoft Learn)](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live-how-to?wt.mc_id=WDIT-MVP-5003104)
 
 ## 📈 Stats
 

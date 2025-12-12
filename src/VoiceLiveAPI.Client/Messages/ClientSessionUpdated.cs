@@ -77,7 +77,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Client.Messages
                         },
                         Background = new Background
                         {
-                            Color = "#00FF00FF"
+                            Color = "#FFFFFFFF"
                         }
                     }
                 }

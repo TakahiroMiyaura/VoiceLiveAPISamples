@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "VoiceLiveAPI.Avatars": {
+      "commandName": "Project",
+      "nativeDebugging": true
+    }
+  }
+}
