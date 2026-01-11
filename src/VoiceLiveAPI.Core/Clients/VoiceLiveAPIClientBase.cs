@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Takahiro Miyaura
+// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
@@ -22,6 +22,11 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients
     ///     Abstract base class for Azure AI VoiceInfo Live API clients.
     ///     Provides common functionality for WebSocket communication, audio processing, and message handling.
     /// </summary>
+    /// <remarks>
+    ///     This class is deprecated. Use <see cref="VoiceLiveClient" /> and <see cref="VoiceLiveSession" /> instead
+    ///     for a more modern API that aligns with the official Azure.AI.VoiceLive SDK pattern.
+    /// </remarks>
+    [Obsolete("Use VoiceLiveClient and VoiceLiveSession instead. This class will be removed in a future version.")]
     public abstract class VoiceLiveAPIClientBase : IDisposable, ILogOutputClass
     {
         #region Constructor
@@ -44,7 +49,8 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients
         #region Private Fields
 
         private readonly Queue<string> receivedMessages = new Queue<string>();
-
+        private readonly List<MessageHandlerManagerBase> managers = new List<MessageHandlerManagerBase>();
+        private static JsonSerializerOptions jsonSerializerOptions;
         private Task messageHandlingTask;
 
         /// <summary>
@@ -102,9 +108,6 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients
 
 
         #region Public Methods
-
-        private readonly List<MessageHandlerManagerBase> managers = new List<MessageHandlerManagerBase>();
-        private static JsonSerializerOptions jsonSerializerOptions;
 
         /// <summary>
         ///     Registers a <see cref="MessageHandlerManagerBase" /> to handle incoming messages.
@@ -241,7 +244,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients
         {
             var msg = string.Concat(
                 message.Substring(0, message.Length > maxMessageLength ? maxMessageLength : message.Length), "...");
-            Logger?.Log(level, "{msg}", msg);
+            Logger?.Log(level, "{msg}", message);
         }
 
         /// <summary>
@@ -354,14 +357,14 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients
                     if (!root.TryGetProperty("type", out var typeElement))
                     {
                         LogError("Message has no type field");
-                        return;
+                        continue;
                     }
 
                     var messageType = typeElement.GetString();
                     if (string.IsNullOrEmpty(messageType))
                     {
                         LogError("Message type is null or empty");
-                        return;
+                        continue;
                     }
 
                     Log(LogLevel.Information, $"Process message type:{messageType}");

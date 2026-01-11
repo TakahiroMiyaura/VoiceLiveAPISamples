@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2025 Takahiro Miyaura
+﻿// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
@@ -15,6 +15,9 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
     ///     Manages message handlers specifically for avatar-related WebRTC communication.
     ///     Provides event-driven handling for avatar session messages with lazy registration.
     /// </summary>
+    [Obsolete(
+        "This class is obsolete. Please use the Com.Reseul.Azure.AI.VoiceLiveAPI.Core.AvatarMessageHandlerManager",
+        true)]
     public class AvatarMessageHandlerManager : MessageHandlerManagerBase
     {
         #region Properties, Indexers

@@ -1,29 +1,30 @@
-﻿// Copyright (c) 2025 Takahiro Miyaura
+﻿// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
 using System;
 using System.Text.Json.Serialization;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commands;
 
 namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Client.Messages
 {
     /// <summary>
     ///     Represents a message to append audio data to the input audio buffer.
     /// </summary>
-    public class InputAudioBufferAppend : MessageBase
+    [Obsolete(
+        "This class is obsolete. Use Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commands.Messages.InputAudioBufferAppend instead.")]
+    public class InputAudioBufferAppend : ClientCommand
     {
+        #region Static Fields and Constants
+
         /// <summary>
         ///     The type identifier for this message.
         /// </summary>
         public const string TypeName = "input_audio_buffer.append";
 
-        /// <summary>
-        ///     Base64-encoded audio bytes. This value must be in the format specified by the input_audio_format field in the
-        ///     session configuration.
-        /// </summary>
-        [JsonPropertyName("audio")]
-        public string Audio { get; set; } = string.Empty;
+        #endregion
+
+        #region Constructors
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="InputAudioBufferAppend" /> class.
@@ -31,8 +32,9 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Client.Messages
         public InputAudioBufferAppend()
         {
             EventId = Guid.NewGuid().ToString();
-            Type = TypeName;
         }
+
+        #endregion
 
         /// <summary>
         ///     Encodes audio bytes to a Base64 string.
@@ -43,5 +45,19 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Client.Messages
         {
             return Convert.ToBase64String(audioBytes);
         }
+
+        #region Properties
+
+        /// <inheritdoc />
+        public override string Type => TypeName;
+
+        /// <summary>
+        ///     Base64-encoded audio bytes. This value must be in the format specified by the input_audio_format field in the
+        ///     session configuration.
+        /// </summary>
+        [JsonPropertyName("audio")]
+        public string Audio { get; set; } = string.Empty;
+
+        #endregion
     }
 }

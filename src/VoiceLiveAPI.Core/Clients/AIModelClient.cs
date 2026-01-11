@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Takahiro Miyaura
+// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
@@ -13,15 +13,27 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients
     /// <summary>
     ///     Authentication methods for VoiceLive API clients.
     /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         This enum is used with string-based credential constructors of <see cref="VoiceLiveClient" />,
+    ///         primarily for environments where Azure SDK is not available (e.g., Unity).
+    ///     </para>
+    ///     <para>
+    ///         For environments with Azure SDK support, consider using <see cref="Azure.AzureKeyCredential" /> or
+    ///         <see cref="Azure.Core.TokenCredential" /> constructors instead, which provide automatic token refresh
+    ///         and better integration with Azure services.
+    ///     </para>
+    /// </remarks>
     public enum AuthenticationType
     {
         /// <summary>
-        ///     API key authentication.
+        ///     API key authentication using the "api-key" header.
         /// </summary>
         ApiKey,
 
         /// <summary>
-        ///     Bearer token authentication.
+        ///     Bearer token authentication using the "Authorization: Bearer" header.
+        ///     Tokens can be obtained from external authentication systems (e.g., UnityOIDC).
         /// </summary>
         BearerToken
     }
@@ -30,6 +42,12 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients
     ///     Azure AI Foundry VoiceInfo Live API client for AI Model mode.
     ///     Provides direct connection to AI models (e.g., GPT-4o) with real-time audio communication.
     /// </summary>
+    /// <remarks>
+    ///     This class is deprecated. Use <see cref="VoiceLiveClient" /> with
+    ///     <see cref="VoiceLiveClient.StartSessionAsync(VoiceLiveSessionOptions, System.Threading.CancellationToken)" />
+    ///     instead for a more modern API.
+    /// </remarks>
+    [Obsolete("Use VoiceLiveClient.StartSessionAsync() instead. This class will be removed in a future version.")]
     public class AIModelClient : VoiceLiveAPIClientBase
     {
         #region Constructors

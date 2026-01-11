@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2025 Takahiro Miyaura
+﻿// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
@@ -18,6 +18,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Server
     ///     Manages server-side message handlers for VoiceLiveAPI.
     ///     Registers and dispatches events for various message types received from the server.
     /// </summary>
+    [Obsolete("This class is obsolete. Use Com.Reseul.Azure.AI.VoiceLiveAPI.Core.ServerMessageHandlerManager instead.")]
     public class ServerMessageHandlerManager : MessageHandlerManagerBase
     {
         /// <summary>
@@ -53,7 +54,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Server
                 }
                 else
                 {
-                    throw new InvalidOperationException("Handler not registered for ResponseAudioDeltaHandler.");
+                    throw new InvalidOperationException("Handler not registered for ResponseAnimationVisemeDeltaHandler.");
                 }
             }
         }
@@ -84,7 +85,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Server
                 }
                 else
                 {
-                    throw new InvalidOperationException("Handler not registered for ResponseAudioDeltaHandler.");
+                    throw new InvalidOperationException("Handler not registered for ResponseAnimationVisemeDoneHandler.");
                 }
             }
         }
@@ -148,7 +149,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Server
                 }
                 else
                 {
-                    throw new InvalidOperationException("Handler not registered for ResponseAudioDeltaHandler.");
+                    throw new InvalidOperationException("Handler not registered for ConversationItemInputAudioTranscriptionCompletedHandler.");
                 }
             }
         }
@@ -179,7 +180,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Server
                 }
                 else
                 {
-                    throw new InvalidOperationException("Handler not registered for ResponseAudioDeltaHandler.");
+                    throw new InvalidOperationException("Handler not registered for ServerSessionUpdateHandler.");
                 }
             }
         }

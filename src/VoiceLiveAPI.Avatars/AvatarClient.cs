@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2025 Takahiro Miyaura
+﻿// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
@@ -9,8 +9,9 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars.Clients.Messages;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commands.Messages;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Logs;
 using Microsoft.Extensions.Logging;
@@ -28,7 +29,8 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
     /// <param name="frame">Video frame data</param>
     /// <param name="fmt">Video format</param>
     /// <param name="timestamp">RTP timestamp (90000Hz clock rate for video)</param>
-    public delegate void VideoFrameReceivedDelegate(IPEndPoint remote, uint ssrc, byte[] frame, VideoFormat fmt, uint timestamp);
+    public delegate void VideoFrameReceivedDelegate(IPEndPoint remote, uint ssrc, byte[] frame, VideoFormat fmt,
+        uint timestamp);
 
     /// <summary>
     ///     Avatar Audio Frame Received delegate
@@ -44,17 +46,17 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
     /// </summary>
     public class AvatarClient : ILogOutputClass
     {
-        private RTCPeerConnection pc;
+        /// <summary>
+        ///     Latest audio RTP timestamp (48000Hz clock).
+        /// </summary>
+        private uint lastAudioTimestamp;
 
         /// <summary>
         ///     Latest video RTP timestamp (90000Hz clock).
         /// </summary>
         private uint lastVideoTimestamp;
 
-        /// <summary>
-        ///     Latest audio RTP timestamp (48000Hz clock).
-        /// </summary>
-        private uint lastAudioTimestamp;
+        private RTCPeerConnection pc;
 
         /// <summary>
         ///     Provides logging functionality for the AvatarClient class.
@@ -76,7 +78,30 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
         /// </summary>
         /// <param name="server">ICE server information.</param>
         /// <param name="client">Instance of VoiceLiveAPI client.</param>
+        [Obsolete("Use AvatarConnectAsync(IceServers, VoiceLiveSession) instead. This method will be removed in a future version.")]
         public async Task AvatarConnectAsync(IceServers server, VoiceLiveAPIClientBase client)
+        {
+            var sdpData = await CreateSdpOfferAsync(server);
+            await sdpData.SendAsync(client);
+        }
+
+        /// <summary>
+        ///     Send avatar connect message using the new VoiceLiveSession API.
+        /// </summary>
+        /// <param name="server">ICE server information.</param>
+        /// <param name="session">Instance of VoiceLiveSession.</param>
+        public async Task AvatarConnectAsync(IceServers server, VoiceLiveSession session)
+        {
+            var sdpData = await CreateSdpOfferAsync(server);
+            await sdpData.SendAsync(session);
+        }
+
+        /// <summary>
+        ///     Creates the SDP offer for avatar connection.
+        /// </summary>
+        /// <param name="server">ICE server information.</param>
+        /// <returns>SessionAvatarConnect with the SDP offer.</returns>
+        private async Task<SessionAvatarConnect> CreateSdpOfferAsync(IceServers server)
         {
             LogFactory.Set(LoggerFactoryManager.Current);
             var cfg = new RTCConfiguration
@@ -97,19 +122,19 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
 
             var h264 = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.video, 96, "H264/90000",
                 "packetization-mode=1;profile-level-id=42e01f");
-            var pcm16 = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.audio, 111, "opus/48000/2", null);
+            var pcm16 = new SDPAudioVideoMediaFormat(SDPMediaTypesEnum.audio, 111, "opus/48000/2");
             pc.addTrack(new MediaStreamTrack(
                 SDPMediaTypesEnum.video, /*isLocal*/ false,
                 new List<SDPAudioVideoMediaFormat> { h264 },
                 MediaStreamStatusEnum.RecvOnly));
             pc.addTrack(new MediaStreamTrack(
-                SDPMediaTypesEnum.audio,false,
+                SDPMediaTypesEnum.audio, false,
                 new List<SDPAudioVideoMediaFormat> { pcm16 },
-            MediaStreamStatusEnum.RecvOnly)
-                );
+                MediaStreamStatusEnum.RecvOnly)
+            );
             pc.AcceptRtpFromAny = true;
 
-            var tcs = new TaskCompletionSource<bool>();
+            TaskCompletionSource<bool> tcs = new TaskCompletionSource<bool>();
             pc.onicegatheringstatechange += s =>
             {
                 if (s == RTCIceGatheringState.complete) tcs.TrySetResult(true);
@@ -118,22 +143,21 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
             pc.createOffer();
             await tcs.Task;
 
-            var fullOffer = pc.createOffer();
+            RTCSessionDescriptionInit fullOffer = pc.createOffer();
             await pc.setLocalDescription(fullOffer);
 
             SetLogProc();
 
-            var sdp = pc.localDescription.sdp.ToString();
+            string sdp = pc.localDescription.sdp.ToString();
             sdp = sdp.Replace("UDP/TLS/RTP/SAVP", "UDP/TLS/RTP/SAVPF");
             Logger.LogDebug("{sdp}", sdp);
             sdp = sdp.Replace("\r", "\\r").Replace("\n", "\\n");
             sdp = $"{{\"type\": \"offer\",\"sdp\": \"{sdp}\"}}";
 
-            var data = new SessionAvatarConnect
+            return new SessionAvatarConnect
             {
                 ClientSdp = Convert.ToBase64String(Encoding.UTF8.GetBytes(sdp))
             };
-            await data.SendAsync(client);
         }
 
         /// <summary>
@@ -142,9 +166,9 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
         /// <param name="sdp">The SDP message to process.</param>
         public void AvatarConnecting(string sdp)
         {
-            var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(sdp);
-            var str = dict["sdp"].ToString()?.Replace("\\r\\n", "\r\n");
-            Logger.LogDebug( "{sdp}", str);
+            Dictionary<string, object> dict = JsonSerializer.Deserialize<Dictionary<string, object>>(sdp);
+            string str = dict["sdp"].ToString()?.Replace("\\r\\n", "\r\n");
+            Logger.LogDebug("{sdp}", str);
             pc.setRemoteDescription(new RTCSessionDescriptionInit
             {
                 sdp = str,
@@ -154,7 +178,6 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
 
         private void SetLogProc()
         {
-            
             pc.OnRtpPacketReceived += (ep, kind, pkt) =>
                 Logger.LogTrace(
                     "[Avatar][rtp] {kind} {ep} pt={pkt.Header.PayloadType} seq={pkt.Header.SequenceNumber}", kind, ep,
@@ -180,7 +203,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
 
             pc.OnVideoFormatsNegotiated += formats =>
             {
-                var s = string.Join(", ",
+                string s = string.Join(", ",
                     formats.Select(f => $"{f.Codec},{f.FormatID},{f.FormatName},{f.ClockRate},{f.Parameters}"));
                 Logger.LogTrace("[Avatar][video] negotiated formats = {fmt}", s);
             };
@@ -188,7 +211,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
             // RTP 受信（映像/音声どちらも）- タイムスタンプを保存
             pc.OnRtpPacketReceived += delegate(IPEndPoint remote, SDPMediaTypesEnum media, RTPPacket pkt)
             {
-                var len = pkt.Payload != null ? pkt.Payload.Length : 0;
+                int len = pkt.Payload != null ? pkt.Payload.Length : 0;
                 if (media == SDPMediaTypesEnum.video)
                 {
                     lastVideoTimestamp = pkt.Header.Timestamp;
@@ -209,21 +232,22 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
             pc.OnVideoFrameReceived += delegate(IPEndPoint remote, uint ssrc, byte[] frame, VideoFormat fmt)
             {
                 OnVideoFrameReceived?.Invoke(remote, ssrc, frame, fmt, lastVideoTimestamp);
-                var frameLength = frame != null ? frame.Length : 0;
-                var fmtStr = fmt.ToString();
+                int frameLength = frame != null ? frame.Length : 0;
+                string fmtStr = fmt.ToString();
                 Logger.LogTrace("[Avatar][FRAME][video] {m0} ssrc={m1} format={m2} bytes={m3} ts={m4}",
                     remote, ssrc, fmtStr, frameLength, lastVideoTimestamp);
             };
 
             // 再構成済み「音声フレーム」受信（エンコード済みフレーム単位）
-            var audioFrameReceivedCount = 0;
-            var audioDataEmptyCount = 0;
-            var audioDataValidCount = 0;
+            int audioFrameReceivedCount = 0;
+            int audioDataEmptyCount = 0;
+            int audioDataValidCount = 0;
 
-            pc.OnAudioFrameReceived += delegate(SIPSorceryMedia.Abstractions.EncodedAudioFrame audioFrame)
+            pc.OnAudioFrameReceived += delegate(EncodedAudioFrame audioFrame)
             {
                 audioFrameReceivedCount++;
-                Logger.LogTrace("[Avatar][FRAME][audio] OnAudioFrameReceived called (#{count})", audioFrameReceivedCount);
+                Logger.LogTrace("[Avatar][FRAME][audio] OnAudioFrameReceived called (#{count})",
+                    audioFrameReceivedCount);
 
                 // Try different possible property names for audio data
                 byte[] audioData = null;
@@ -231,12 +255,15 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
                 // Common property names in audio frame classes
                 if (audioFrame != null)
                 {
-                    Logger.LogTrace("[Avatar][FRAME][audio] audioFrame is not null, type: {type}", audioFrame.GetType().Name);
+                    Logger.LogTrace("[Avatar][FRAME][audio] audioFrame is not null, type: {type}",
+                        audioFrame.GetType().Name);
                     audioData = audioFrame.EncodedAudio;
-                    Logger.LogTrace("channel:{format},ClockRate:{ClockRate},Codec:{Codec},FormatID:{FormatID},FormatName{FormatName},Parameters{Parameters},RtpClockRate{RtpClockRate}",
+                    Logger.LogTrace(
+                        "channel:{format},ClockRate:{ClockRate},Codec:{Codec},FormatID:{FormatID},FormatName{FormatName},Parameters{Parameters},RtpClockRate{RtpClockRate}",
                         audioFrame.AudioFormat.ChannelCount,
-                        audioFrame.AudioFormat.ClockRate, audioFrame.AudioFormat.Codec, audioFrame.AudioFormat.FormatID, audioFrame.AudioFormat.FormatName, audioFrame.AudioFormat.Parameters, audioFrame.AudioFormat.RtpClockRate);
-
+                        audioFrame.AudioFormat.ClockRate, audioFrame.AudioFormat.Codec, audioFrame.AudioFormat.FormatID,
+                        audioFrame.AudioFormat.FormatName, audioFrame.AudioFormat.Parameters,
+                        audioFrame.AudioFormat.RtpClockRate);
                 }
                 else
                 {
@@ -263,8 +290,9 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
                 else
                 {
                     audioDataEmptyCount++;
-                    var dataLen = audioData?.Length ?? -1;
-                    Logger.LogWarning("[Avatar][FRAME][audio] No valid audio data found in frame (data length: {len})", dataLen);
+                    int dataLen = audioData?.Length ?? -1;
+                    Logger.LogWarning("[Avatar][FRAME][audio] No valid audio data found in frame (data length: {len})",
+                        dataLen);
                 }
             };
             // メディア別のタイムアウト（一定時間受信なし）

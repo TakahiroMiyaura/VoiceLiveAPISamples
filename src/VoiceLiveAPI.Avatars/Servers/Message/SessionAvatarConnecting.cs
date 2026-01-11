@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2025 Takahiro Miyaura
+﻿// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
@@ -11,6 +11,8 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars.Servers.Message
     /// <summary>
     ///     Represents a message indicating that a session avatar is connecting.
     /// </summary>
+    [Obsolete("This class is obsolete. Please use the Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Models.AvatarConnecting",
+        true)]
     public class SessionAvatarConnecting : MessageBase
     {
         /// <summary>

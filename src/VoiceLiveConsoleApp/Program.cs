@@ -1,504 +1,1166 @@
-// Copyright (c) 2025 Takahiro Miyaura
+// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
-using System.DirectoryServices;
 using System.Text;
 using System.Text.Json;
+using Azure;
+using Azure.Identity;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Client.Messages;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Events;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Logs;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Server;
 using Concentus;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NAudio.Wave;
+using ServerMessageHandlerManager = Com.Reseul.Azure.AI.VoiceLiveAPI.Core.ServerMessageHandlerManager;
+using AvatarMessageHandlerManager = Com.Reseul.Azure.AI.VoiceLiveAPI.Core.AvatarMessageHandlerManager;
 
-namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI;
-
-/// <summary>
-///     Specifies the connection mode for the VoiceInfo Live API client.
-/// </summary>
-public enum ConnectionMode
+namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
 {
     /// <summary>
-    ///     Direct connection to AI models (e.g., GPT-4o).
+    ///     Specifies the connection mode for the VoiceInfo Live API client.
     /// </summary>
-    AIModel,
-
-    /// <summary>
-    ///     Connection to custom AI agents.
-    /// </summary>
-    AIAgent,
-
-    /// <summary>
-    ///     Avatar mode with video streaming capabilities.
-    /// </summary>
-    Avatar
-}
-
-/// <summary>
-///     Main console application class for the VoiceLive API sample application.
-///     Provides interactive voice communication with Azure AI services.
-/// </summary>
-internal class Program
-{
-    #region Public Methods
-
-    /// <summary>
-    ///     Main entry point of the console application.
-    /// </summary>
-    /// <param name="args">Command-line arguments.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    [STAThread]
-    private static async Task Main()
+    public enum ConnectionMode
     {
-        // Set console encoding to UTF-8 to handle Japanese characters properly
-        Console.OutputEncoding = Encoding.UTF8;
-        Console.InputEncoding = Encoding.UTF8;
+        /// <summary>
+        ///     Direct connection to AI models (e.g., GPT-4o).
+        /// </summary>
+        AIModel,
 
-        var loggerFactory = LoggerFactory.Create(configure =>
+        /// <summary>
+        ///     Connection to custom AI agents.
+        /// </summary>
+        AIAgent,
+
+        /// <summary>
+        ///     Avatar mode with video streaming capabilities.
+        /// </summary>
+        Avatar
+    }
+
+    /// <summary>
+    ///     Main console application class for the VoiceLive API sample application.
+    ///     Provides interactive voice communication with Azure AI services.
+    /// </summary>
+    internal class Program
+    {
+        #region Public Methods
+
+        /// <summary>
+        ///     Main entry point of the console application.
+        /// </summary>
+        /// <param name="args">Command-line arguments.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        [STAThread]
+        private static async Task Main()
         {
-            configure.SetMinimumLevel(LogLevel.Error); // Production logging level
-            configure.AddSimpleConsole(options =>
+            // Set console encoding to UTF-8 to handle Japanese characters properly
+            Console.OutputEncoding = Encoding.UTF8;
+            Console.InputEncoding = Encoding.UTF8;
+
+            ILoggerFactory loggerFactory = LoggerFactory.Create(configure =>
             {
-                options.IncludeScopes = true;
-                options.SingleLine = true;
-                options.TimestampFormat = "[yyyy/MM/dd HH:mm:ss] ";
+                configure.SetMinimumLevel(LogLevel.Error);
+                configure.AddSimpleConsole(options =>
+                {
+                    options.IncludeScopes = true;
+                    options.SingleLine = true;
+                    options.TimestampFormat = "[yyyy/MM/dd HH:mm:ss] ";
+                });
             });
-        });
 
-        LoggerFactoryManager.Set(loggerFactory);
-        logger = LoggerFactoryManager.CreateLogger<Program>();
+            LoggerFactoryManager.Set(loggerFactory);
+            logger = LoggerFactoryManager.CreateLogger<Program>();
 
 
-        var config = new ConfigurationBuilder()
-            .AddUserSecrets<Program>()
-            .Build();
+            IConfigurationRoot config = new ConfigurationBuilder()
+                .AddUserSecrets<Program>()
+                .Build();
 
-        azureIdentityTokenRequestUrl = config["Identity:AzureEndpoint"] ?? azureIdentityTokenRequestUrl;
-        azureEndpoint = config["VoiceLiveAPI:AzureEndpoint"] ?? azureEndpoint;
-        apiKey = config["AzureAIFoundry:ApiKey"] ?? apiKey;
-        agentProjectName = config["AzureAIFoundry:AgentProjectName"] ?? agentProjectName;
-        agentId = config["AzureAIFoundry:AgentId"] ?? agentId;
-        agentAccessToken = config["AzureAIFoundry:AgentAccessToken"] ?? agentAccessToken;
+            azureIdentityTokenRequestUrl = config["Identity:AzureEndpoint"] ?? azureIdentityTokenRequestUrl;
+            azureEndpoint = config["VoiceLiveAPI:AzureEndpoint"] ?? azureEndpoint;
+            apiKey = config["AzureAIFoundry:ApiKey"] ?? apiKey;
+            agentProjectName = config["AzureAIFoundry:AgentProjectName"] ?? agentProjectName;
+            agentId = config["AzureAIFoundry:AgentId"] ?? agentId;
+            agentAccessToken = config["AzureAIFoundry:AgentAccessToken"] ?? agentAccessToken;
 
-        Console.WriteLine("Azure VoiceInfo Live API Console Application");
-        Console.WriteLine("Enhanced with AIModelClient, AIAgentClient & Avatar Video");
-        Console.WriteLine("=========================================================");
+            Console.WriteLine("Azure VoiceLive API Console Application");
+            Console.WriteLine("Using VoiceLiveClient / VoiceLiveSession API");
+            Console.WriteLine("============================================");
 
-        try
+            try
+            {
+                // Choose connection mode
+                currentMode = ChooseConnectionMode();
+
+                // Initialize client based on mode
+                await InitializeClientAsync();
+
+                // Initialize audio components
+                InitializeAudio();
+
+                // Connect to VoiceLive API
+                Console.WriteLine($"Connecting to Azure VoiceLive API in {currentMode} mode...");
+
+                // Start session with VoiceLiveClient
+                VoiceLiveSessionOptions sessionOptions = CreateSessionOptions(currentMode);
+
+                if (currentMode == ConnectionMode.AIModel)
+                {
+                    voiceLiveSession = await voiceLiveClient!.StartSessionAsync(sessionOptions);
+                }
+                else
+                {
+                    // AI Agent mode or Avatar mode
+                    voiceLiveSession = await voiceLiveClient!.StartAgentSessionAsync(
+                        agentProjectName, agentId, sessionOptions);
+                }
+
+                // Add message handlers to session
+                SetupSessionEventHandlers();
+
+                // Start audio input
+                StartRecording();
+
+                Console.WriteLine("\nReady for conversation!");
+                Console.WriteLine("Commands:");
+                Console.WriteLine("- Press 'R' to start/stop recording");
+                Console.WriteLine("- Press 'P' to start/stop playback");
+                Console.WriteLine("- Press 'M' to switch mode and authentication (requires reconnection)");
+                Console.WriteLine("- Press 'C' to clear audio queue");
+                Console.WriteLine("- Press 'S' to show detailed status");
+                Console.WriteLine("- Press 'V' to toggle avatar video streaming (Avatar mode only)");
+                Console.WriteLine("- Press 'F' to show avatar streaming information (Avatar mode only)");
+                Console.WriteLine("- Press 'T' to test connection and reconnect if needed");
+                Console.WriteLine("- Press 'Q' to quit");
+
+                // Main loop
+                bool running = true;
+                while (running)
+                {
+                    ConsoleKeyInfo key = Console.ReadKey(true);
+                    switch (key.Key)
+                    {
+                        case ConsoleKey.R:
+                            ToggleRecording();
+                            break;
+                        case ConsoleKey.P:
+                            TogglePlayback();
+                            break;
+                        case ConsoleKey.M:
+                            await SwitchMode();
+                            break;
+                        case ConsoleKey.C:
+                            ClearAudioQueue();
+                            break;
+                        case ConsoleKey.S:
+                            ShowStatus();
+                            break;
+                        case ConsoleKey.V:
+                            ToggleAvatarVideoStreaming();
+                            break;
+                        case ConsoleKey.F:
+                            StartFFplayForAvatarStreaming();
+                            break;
+                        case ConsoleKey.T:
+                            await TestAndReconnect();
+                            break;
+                        case ConsoleKey.Q:
+                            running = false;
+                            break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError("Error: {ex}", ex);
+            }
+            finally
+            {
+                await Cleanup();
+            }
+        }
+
+        #endregion
+
+        #region Static Fields and Constants
+
+        /// <summary>
+        ///     Audio sample rate in Hz for regular mode.
+        /// </summary>
+        private const int SampleRate = 24000;
+
+        /// <summary>
+        ///     Number of audio channels for regular mode.
+        /// </summary>
+        private const int Channels = 1;
+
+        /// <summary>
+        ///     Bits per audio sample.
+        /// </summary>
+        private const int BitsPerSample = 16;
+
+        /// <summary>
+        ///     Audio sample rate in Hz for Avatar mode (Opus).
+        /// </summary>
+        private const int AvatarSampleRate = 48000;
+
+        /// <summary>
+        ///     Number of audio channels for Avatar mode (Opus).
+        /// </summary>
+        private const int AvatarChannels = 2;
+
+        /// <summary>
+        ///     Audio input device for recording.
+        /// </summary>
+        private static WaveInEvent waveIn = null!;
+
+        /// <summary>
+        ///     Audio output device for playback.
+        /// </summary>
+        private static WaveOutEvent waveOut = null!;
+
+        /// <summary>
+        ///     Buffered wave provider for audio playback.
+        /// </summary>
+        private static BufferedWaveProvider waveProvider = null!;
+
+        /// <summary>
+        ///     Buffered wave provider for Avatar audio playback.
+        /// </summary>
+        private static BufferedWaveProvider? avatarWaveProvider;
+
+        /// <summary>
+        ///     Opus decoder for Avatar audio streams.
+        /// </summary>
+        private static IOpusDecoder? opusDecoder;
+
+        /// <summary>
+        ///     Flag indicating if recording is active.
+        /// </summary>
+        private static bool isRecording;
+
+        /// <summary>
+        ///     Flag indicating if playback is active.
+        /// </summary>
+        private static bool isPlaying;
+
+        /// <summary>
+        ///     Logger instance for application logging.
+        /// </summary>
+        private static ILogger? logger;
+
+        /// <summary>
+        ///     Azure AI Services endpoint URL.
+        /// </summary>
+        private static string azureEndpoint = "<your Azure AI Services Endpoint>";
+
+        /// <summary>
+        ///     Azure AI Foundry project name for agent mode.
+        /// </summary>
+        private static string agentProjectName = "<your Azure AI Foundry Project Name>";
+
+        /// <summary>
+        ///     Azure AI agent identifier for agent mode.
+        /// </summary>
+        private static string agentId = "<your Azure AI Agent Id>";
+
+        /// <summary>
+        ///     Token request URL for Azure Identity authentication.
+        /// </summary>
+        private static string azureIdentityTokenRequestUrl = "<Token request url(ex:https://ai.azure.com/.default)>";
+
+        /// <summary>
+        ///     Azure AI Foundry API key for authentication.
+        /// </summary>
+        private static string apiKey = "<Azure AI Foundry API Key>";
+
+        /// <summary>
+        ///     Access token for agent authentication.
+        /// </summary>
+        private static string agentAccessToken = "<Azure AI Foundry API Key>";
+
+        /// <summary>
+        ///     Server message handler manager for handling server responses.
+        /// </summary>
+        private static ServerMessageHandlerManager? serverManager;
+
+        /// <summary>
+        ///     Avatar message handler manager for handling avatar-specific messages.
+        /// </summary>
+        private static AvatarMessageHandlerManager? avatarManager;
+
+        /// <summary>
+        ///     RTP-based avatar video streamer with synchronized A/V playback.
+        /// </summary>
+        private static AvatarVideoStreamer? avatarVideoStreamer;
+
+        /// <summary>
+        ///     Avatar client for WebRTC avatar video streaming.
+        /// </summary>
+        private static AvatarClient? avatarClient;
+
+        /// <summary>
+        ///     Current connection mode for reconnection purposes.
+        /// </summary>
+        private static ConnectionMode currentMode;
+
+        /// <summary>
+        ///     Indicates whether API Key authentication is used (false = EntraID/TokenCredential).
+        /// </summary>
+        private static bool useApiKeyAuth;
+
+        /// <summary>
+        ///     Audio queue for buffering audio data.
+        /// </summary>
+        private static readonly Queue<byte[]> AudioQueue = new();
+
+        /// <summary>
+        ///     Audio playback background task.
+        /// </summary>
+#pragma warning disable IDE0044 // Add readonly modifier
+        private static Task audioPlaybackTask = Task.CompletedTask;
+#pragma warning restore IDE0044 // Add readonly modifier
+
+        /// <summary>
+        ///     VoiceLiveClient instance for session management.
+        /// </summary>
+        private static VoiceLiveClient? voiceLiveClient;
+
+        /// <summary>
+        ///     VoiceLiveSession instance for real-time communication.
+        /// </summary>
+        private static VoiceLiveSession? voiceLiveSession;
+
+        #endregion
+
+        #region Private Methods
+
+        /// <summary>
+        ///     Creates VoiceLiveSessionOptions based on the connection mode.
+        /// </summary>
+        /// <param name="mode">The connection mode.</param>
+        /// <returns>Configured session options.</returns>
+        private static VoiceLiveSessionOptions CreateSessionOptions(ConnectionMode mode)
         {
-            // Choose connection mode
-            currentMode = ChooseConnectionMode();
+            VoiceLiveSessionOptions? options = VoiceLiveSessionOptions.CreateDefault();
 
-            // Initialize client based on mode
-            await InitializeClientAsync(currentMode);
-            SetupClientEvents();
+            switch (mode)
+            {
+                case ConnectionMode.AIModel:
+                case ConnectionMode.AIAgent:
+                    // Standard audio settings - match ClientSessionUpdate.Default
+                    options.Avatar = null;
+                    // Ensure modalities include audio for audio output
+                    options.Modalities = new[] { "text", "audio" };
+                    options.InputAudioFormat = "pcm16";
+                    options.OutputAudioFormat = "pcm16";
+                    options.InputAudioSamplingRate = 24000;
+                    // Voice configuration - required for audio output
+                    options.Voice = new Voice
+                    {
+                        Name = "ja-JP-Nanami:DragonHDLatestNeural",
+                        Type = "azure-standard"
+                    };
+                    // Output audio timestamp types for word-level timing
+                    options.OutputAudioTimestampTypes = new[] { "word" };
+                    // Animation settings for viseme output
+                    options.Animation = new Animation
+                    {
+                        Outputs = new[] { "viseme_id" }
+                    };
+                    // Configure VAD with explicit settings to ensure response generation
+                    options.TurnDetection = new TurnDetection
+                    {
+                        Type = "server_vad",
+                        Threshold = 0.5f, // Default threshold
+                        SilenceDurationMs = 500, // Wait 500ms of silence before ending turn
+                        CreateResponse = true // Explicitly enable automatic response generation
+                    };
+                    // Input audio noise reduction
+                    options.InputAudioNoiseReduction = new AudioInputAudioNoiseReductionSettings
+                    {
+                        Type = "azure_deep_noise_suppression"
+                    };
+                    break;
 
-            // Initialize audio components
-            InitializeAudio();
+                case ConnectionMode.Avatar:
+                    // Avatar mode - full settings like ClientSessionUpdate.Default
+                    options.Modalities = new[] { "text", "audio" };
+                    options.InputAudioFormat = "pcm16";
+                    options.OutputAudioFormat = "pcm16";
+                    options.InputAudioSamplingRate = 24000;
+                    // Voice configuration
+                    options.Voice = new Voice
+                    {
+                        Name = "ja-JP-Nanami:DragonHDLatestNeural",
+                        Type = "azure-standard"
+                    };
+                    // Output audio timestamp types
+                    options.OutputAudioTimestampTypes = new[] { "word" };
+                    // Animation settings for viseme output
+                    options.Animation = new Animation
+                    {
+                        Outputs = new[] { "viseme_id" }
+                    };
+                    // Turn detection
+                    options.TurnDetection = new TurnDetection
+                    {
+                        Type = "server_vad",
+                        Threshold = 0.5f,
+                        SilenceDurationMs = 500,
+                        CreateResponse = true
+                    };
+                    // Input audio noise reduction
+                    options.InputAudioNoiseReduction = new AudioInputAudioNoiseReductionSettings
+                    {
+                        Type = "azure_deep_noise_suppression"
+                    };
+                    // Avatar video settings
+                    options.Avatar = new Avatar
+                    {
+                        Character = "lisa",
+                        Style = "casual-sitting",
+                        Customized = false,
+                        Video = new Video
+                        {
+                            BitRate = 2000000,
+                            Codec = "h264",
+                            Crop = new Crop
+                            {
+                                TopLeft = new[] { 560, 0 },
+                                BottomRight = new[] { 1360, 1080 }
+                            },
+                            Resolution = new Resolution
+                            {
+                                Width = 1920,
+                                Height = 1080
+                            },
+                            Background = new Background
+                            {
+                                Color = "#FFFFFFFF"
+                            }
+                        }
+                    };
+                    break;
+            }
 
-            // Connect to VoiceInfo Live API
-            Console.WriteLine($"Connecting to Azure VoiceInfo Live API in {currentMode} mode...");
-            var session = ClientSessionUpdate.Default;
+            return options;
+        }
 
-            // Configure avatar session based on mode
+        /// <summary>
+        ///     Sets up event handlers for the VoiceLiveSession.
+        /// </summary>
+        private static void SetupSessionEventHandlers()
+        {
+            if (voiceLiveSession == null)
+            {
+                logger?.LogError("VoiceLiveSession is null, cannot set up event handlers");
+                return;
+            }
+
+            // Initialize message handler managers
+            serverManager = new ServerMessageHandlerManager();
+            avatarManager = new AvatarMessageHandlerManager();
+            voiceLiveSession.AddMessageHandlerManager(serverManager);
+
             if (currentMode == ConnectionMode.Avatar)
             {
-                Console.WriteLine("\ud83d\udd0a Avatar mode: Audio output enabled in session");
-                logger?.LogInformation("Avatar mode: Audio output enabled in session");
+                voiceLiveSession.AddMessageHandlerManager(avatarManager);
+                logger?.LogInformation("Avatar mode: Added avatar message handler");
+
+                // Initialize avatar client for Avatar mode
+                avatarClient = new AvatarClient();
+                logger?.LogInformation("Avatar client initialized for WebRTC streaming");
+            }
+
+            // Set up event handlers
+            SetupServerManagerEvents();
+            SetupAvatarManagerEvents();
+
+            logger?.LogInformation("Session event handlers configured");
+        }
+
+        /// <summary>
+        ///     Sets up ServerMessageHandlerManager events.
+        /// </summary>
+        private static void SetupServerManagerEvents()
+        {
+            if (serverManager == null) return;
+
+            serverManager.OnAudioDeltaReceived += response =>
+            {
+                if (string.IsNullOrEmpty(response.Delta))
+                {
+                    logger?.LogWarning("Audio delta received but Delta is null or empty");
+                    return;
+                }
+
+                byte[] pcmData = Convert.FromBase64String(response.Delta);
+
+                if (currentMode == ConnectionMode.Avatar)
+                {
+                    // Avatar mode handles audio through WebRTC
+                    return;
+                }
+
+                if (pcmData.Length > 0)
+                {
+                    // Add audio data directly to the wave provider for playback
+                    lock (waveProvider)
+                    {
+                        waveProvider.AddSamples(pcmData, 0, pcmData.Length);
+                    }
+
+                    // Check actual playback state, not just the isPlaying flag
+                    // NAudio may have stopped due to empty buffer even if isPlaying is true
+                    if (waveOut.PlaybackState != PlaybackState.Playing)
+                    {
+                        waveOut.Play();
+                        isPlaying = true;
+                    }
+                }
+            };
+
+            serverManager.OnTranscriptionReceived += transcription =>
+            {
+                logger?.Log(LogLevel.Trace, "[message]: {Transcript}", transcription.Transcript);
+            };
+
+            serverManager.OnSessionUpdateReceived += async sessionUpdate =>
+            {
+                logger?.Log(LogLevel.Trace, "type : {Type}", sessionUpdate.Type);
+                logger?.LogInformation("Session update received - Avatar: {hasAvatar}, IceServers: {hasIce}",
+                    sessionUpdate.Avatar != null,
+                    sessionUpdate.Avatar?.IceServers != null
+                        ? sessionUpdate.Avatar.IceServers.Length.ToString()
+                        : "null");
+
+                if (sessionUpdate.Avatar == null || avatarClient == null || voiceLiveSession == null)
+                {
+                    StartRecording();
+                    return;
+                }
+
+                if (sessionUpdate.Avatar.IceServers == null || sessionUpdate.Avatar.IceServers.Length == 0)
+                {
+                    logger?.LogWarning("Avatar is set but IceServers is null or empty");
+                    StartRecording();
+                    return;
+                }
+
+                try
+                {
+                    IceServers? ics = sessionUpdate.Avatar.IceServers[0];
+                    logger?.LogInformation("Starting WebRTC connection with ICE servers: {urls}",
+                        string.Join(", ", ics.Urls));
+
+                    // Connect avatar client to WebRTC
+                    await avatarClient.AvatarConnectAsync(ics, voiceLiveSession);
+
+                    logger?.LogInformation("WebRTC connection initiated successfully");
+
+                    // Initialize avatar video streaming
+                    if (currentMode == ConnectionMode.Avatar && avatarVideoStreamer == null)
+                    {
+                        avatarVideoStreamer = new AvatarVideoStreamer(avatarClient,
+                            logger ?? throw new NullReferenceException("logger is null"));
+
+                        if (!avatarVideoStreamer.StartStreaming())
+                        {
+                            logger?.LogError("Failed to start avatar video streaming");
+                            avatarVideoStreamer?.Dispose();
+                            avatarVideoStreamer = null;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogError(ex, "Exception in OnSessionUpdateReceived handler");
+                    avatarVideoStreamer?.Dispose();
+                    avatarVideoStreamer = null;
+                }
+
+                StartRecording();
+            };
+
+            serverManager.OnErrorReceived += response =>
+            {
+                logger?.LogError("Error received: {Type} - {Response}", response.Type,
+                    JsonSerializer.Serialize(response));
+            };
+
+            serverManager.OnResponseTextDoneReceived += response =>
+            {
+                logger?.LogTrace("{Type} : {Text}", response.Type, response.Text);
+            };
+
+            serverManager.OnConversationCreatedReceived += DebugMessages;
+            serverManager.OnConversationItemCreatedReceived += response =>
+            {
+                string transcripts = "";
+                if (response.Item?.Content != null && response.Item.Content.Length > 0)
+                {
+                    transcripts = response.Item?.Content?.Select(x => x.Transcript).Aggregate((a, b) => a + "\n" + b) ??
+                                  "";
+                }
+
+                logger?.LogTrace(" {role}: {transcripts}", response.Item?.Role, transcripts);
+            };
+            serverManager.OnConversationItemRetrievedReceived += DebugMessages;
+            serverManager.OnConversationItemDeletedReceived += DebugMessages;
+            serverManager.OnConversationItemInputAudioTranscriptionFailedReceived += DebugMessages;
+            serverManager.OnConversationItemTruncatedReceived += DebugMessages;
+            serverManager.OnInputAudioBufferClearedReceived += DebugMessages;
+            serverManager.OnInputAudioBufferCommittedReceived += DebugMessages;
+            serverManager.OnInputAudioBufferSpeechStartedReceived += DebugMessages;
+            serverManager.OnInputAudioBufferSpeechStoppedReceived += DebugMessages;
+
+            // Auto-stop recording when speech is detected as stopped
+            serverManager.OnInputAudioBufferSpeechStoppedReceived += message =>
+            {
+                if (isRecording)
+                {
+                    logger?.LogTrace("🔇 Speech stopped detected (audio_end: {ms}ms) - auto-stopping recording",
+                        message.AudioEndMs);
+                    StopRecording();
+                }
+            };
+
+            serverManager.OnOutputAudioBufferClearedReceived += DebugMessages;
+            serverManager.OnOutputAudioBufferStartedReceived += DebugMessages;
+            serverManager.OnOutputAudioBufferStoppedReceived += DebugMessages;
+            serverManager.OnRateLimitsUpdatedReceived += DebugMessages;
+            serverManager.OnResponseAnimationVisemeDoneReceived += DebugMessages;
+            serverManager.OnResponseAnimationVisemeDeltaReceived += DebugMessages;
+            serverManager.OnResponseAudioDoneReceived += DebugMessages;
+            serverManager.OnResponseAudioTranscriptDeltaReceived += DebugMessages;
+            serverManager.OnResponseAudioTranscriptDoneReceived += DebugMessages;
+            serverManager.OnResponseContentPartAddedReceived += DebugMessages;
+            serverManager.OnResponseContentPartDoneReceived += DebugMessages;
+            serverManager.OnResponseCreatedReceived += DebugMessages;
+            serverManager.OnResponseDoneReceived += DebugMessages;
+            serverManager.OnResponseFunctionCallArgumentsDeltaReceived += DebugMessages;
+            serverManager.OnResponseFunctionCallArgumentsDoneReceived += DebugMessages;
+            serverManager.OnResponseOutputItemAddedReceived += DebugMessages;
+            serverManager.OnResponseOutputItemDoneReceived += response =>
+            {
+                Console.WriteLine(
+                    " {0}: {1}", response.Item.Role,
+                    response.Item.Content?.Select(x => x.Transcript).Aggregate((a, b) => a + "\n" + b));
+            };
+            serverManager.OnResponseTextDeltaReceived += DebugMessages;
+            serverManager.OnSessionCreatedReceived += DebugMessages;
+        }
+
+        /// <summary>
+        ///     Sets up AvatarMessageHandlerManager events.
+        /// </summary>
+        private static void SetupAvatarManagerEvents()
+        {
+            if (avatarManager == null) return;
+
+            avatarManager.OnSessionAvatarConnecting += connecting =>
+            {
+                logger?.Log(LogLevel.Debug, "type : {Type}", connecting.Type);
+
+                if (avatarClient == null)
+                {
+                    logger?.LogError("Avatar connecting event received but avatarClient is null");
+                    return;
+                }
+
+                logger?.LogTrace("Setting remote SDP for WebRTC connection");
+                avatarClient.AvatarConnecting(connecting.ServerSdp);
+                logger?.LogTrace("Remote SDP set successfully");
+            };
+        }
+
+        /// <summary>
+        ///     Prompts the user to choose a connection mode.
+        /// </summary>
+        /// <returns>The selected connection mode.</returns>
+        private static ConnectionMode ChooseConnectionMode()
+        {
+            Console.WriteLine("Choose connection mode:");
+            Console.WriteLine("1. AI Model Mode");
+            Console.WriteLine("2. AI Agent Mode");
+            Console.WriteLine("3. Avatar Mode (with video streaming)");
+            Console.Write("Enter your choice (1, 2, or 3): ");
+
+            while (true)
+            {
+                try
+                {
+                    string? input = Console.ReadLine();
+                    if (string.IsNullOrEmpty(input))
+                    {
+                        Console.Write("Please enter 1, 2, or 3: ");
+                        continue;
+                    }
+
+                    switch (input.Trim())
+                    {
+                        case "1":
+                            Console.WriteLine("Selected: AI Model Mode");
+                            return ConnectionMode.AIModel;
+                        case "2":
+                            Console.WriteLine("Selected: AI Agent Mode");
+                            return ConnectionMode.AIAgent;
+                        case "3":
+                            Console.WriteLine("Selected: Avatar Mode");
+                            return ConnectionMode.Avatar;
+                        default:
+                            Console.Write("Invalid choice. Please enter 1, 2, or 3: ");
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogError(ex, "Error reading console input");
+                    throw;
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Initializes the VoiceLive API client based on the specified mode.
+        /// </summary>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        private static Task InitializeClientAsync()
+        {
+            Console.WriteLine("Choose authentication method:");
+            Console.WriteLine("1. API Key");
+            Console.WriteLine("2. Entra ID (DefaultAzureCredential)");
+            Console.Write("Enter your choice (1 or 2): ");
+
+            int authChoice = ChooseAuthMethod();
+            useApiKeyAuth = authChoice == 1;
+
+            try
+            {
+                if (useApiKeyAuth)
+                {
+                    // API Key authentication using AzureKeyCredential
+                    logger?.LogInformation("Initializing VoiceLiveClient with API Key authentication...");
+                    voiceLiveClient = new VoiceLiveClient(azureEndpoint, new AzureKeyCredential(apiKey));
+                }
+                else
+                {
+                    // Entra ID authentication using DefaultAzureCredential
+                    logger?.LogInformation("Initializing VoiceLiveClient with Entra ID authentication...");
+                    voiceLiveClient = new VoiceLiveClient(
+                        azureEndpoint,
+                        new DefaultAzureCredential(),
+                        new[] { azureIdentityTokenRequestUrl });
+                }
+
+                // Set agent configuration
+                voiceLiveClient.AgentProjectName = agentProjectName;
+                voiceLiveClient.AgentId = agentId;
+                voiceLiveClient.AgentAccessToken = agentAccessToken;
+
+                logger?.LogInformation("VoiceLiveClient initialized successfully");
+            }
+            catch (Exception ex)
+            {
+                logger?.LogError(ex, "Failed to initialize VoiceLiveClient");
+                throw;
+            }
+
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        ///     Prompts the user to choose an authentication method.
+        /// </summary>
+        /// <returns>The selected authentication method (1 for API Key, 2 for Entra ID).</returns>
+        private static int ChooseAuthMethod()
+        {
+            while (true)
+            {
+                try
+                {
+                    string? input = Console.ReadLine();
+                    if (string.IsNullOrEmpty(input))
+                    {
+                        Console.Write("Please enter 1 or 2: ");
+                        continue;
+                    }
+
+                    switch (input.Trim())
+                    {
+                        case "1":
+                            return 1;
+                        case "2":
+                            return 2;
+                        default:
+                            Console.Write("Invalid choice. Please enter 1 or 2: ");
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogError(ex, "Error reading console input for authentication");
+                    throw;
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Switches the connection mode and reinitializes the client.
+        /// </summary>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        private static async Task SwitchMode()
+        {
+            try
+            {
+                Console.WriteLine("\nSwitching mode...");
+
+                // Disconnect current session
+                StopRecording();
+                StopPlayback();
+
+                // Cleanup Avatar audio resources before switching
+                CleanupAudio();
+
+                // Cleanup avatar video streamer before switching
+                if (avatarVideoStreamer != null)
+                {
+                    avatarVideoStreamer.StopStreaming();
+                    avatarVideoStreamer.Dispose();
+                    avatarVideoStreamer = null;
+                }
+
+                // Cleanup avatar client
+                if (avatarClient != null)
+                {
+                    logger?.LogInformation("Cleaning up avatar client before mode switch");
+                    avatarClient = null;
+                }
+
+                // Dispose current session
+                if (voiceLiveSession != null)
+                {
+                    await voiceLiveSession.DisposeAsync();
+                    voiceLiveSession = null;
+                }
+
+                // Choose new mode
+                ConnectionMode newMode = ChooseConnectionMode();
+                currentMode = newMode;
+
+                // Initialize audio for new mode
+                InitializeAudio();
+
+                // Initialize new client
+                await InitializeClientAsync();
+
+                // Start new session
+                Console.WriteLine($"Reconnecting in {newMode} mode...");
+                VoiceLiveSessionOptions sessionOptions = CreateSessionOptions(newMode);
+
+                if (newMode == ConnectionMode.AIModel)
+                {
+                    voiceLiveSession = await voiceLiveClient!.StartSessionAsync(sessionOptions);
+                }
+                else
+                {
+                    voiceLiveSession = await voiceLiveClient!.StartAgentSessionAsync(
+                        agentProjectName, agentId, sessionOptions);
+                }
+
+                SetupSessionEventHandlers();
+                StartRecording();
+
+                Console.WriteLine("Mode switched successfully!");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error switching mode: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        ///     Initializes audio input and output components.
+        /// </summary>
+        private static void InitializeAudio()
+        {
+            // Setup audio input (microphone) - same for all modes
+            waveIn = new WaveInEvent
+            {
+                WaveFormat = new WaveFormat(SampleRate, BitsPerSample, Channels),
+                BufferMilliseconds = 100
+            };
+            waveIn.DataAvailable += OnAudioDataAvailable!;
+            waveIn.RecordingStopped += OnRecordingStopped!;
+
+            // Setup audio output (speakers)
+            waveOut = new WaveOutEvent();
+
+            // Initialize regular audio provider (24kHz, mono, 16-bit)
+            waveProvider = new BufferedWaveProvider(new WaveFormat(SampleRate, BitsPerSample, Channels))
+            {
+                BufferLength = SampleRate * Channels * 2 * 10, // 10 seconds buffer
+                DiscardOnBufferOverflow = true
+            };
+
+            // Initialize Avatar audio provider if in Avatar mode (48kHz, stereo, 16-bit)
+            if (currentMode == ConnectionMode.Avatar)
+            {
+                avatarWaveProvider =
+                    new BufferedWaveProvider(new WaveFormat(AvatarSampleRate, BitsPerSample, AvatarChannels))
+                    {
+                        BufferLength = AvatarSampleRate * AvatarChannels * 2 * 10, // 10 seconds buffer
+                        DiscardOnBufferOverflow = true
+                    };
+
+                // Initialize Opus decoder for Avatar audio
+                try
+                {
+                    opusDecoder = OpusCodecFactory.CreateDecoder(AvatarSampleRate, AvatarChannels);
+                    logger?.LogInformation(
+                        "Opus decoder initialized for Avatar mode: {sampleRate}Hz, {channels} channels",
+                        AvatarSampleRate, AvatarChannels);
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogError(ex, "Failed to initialize Opus decoder for Avatar mode");
+                    throw;
+                }
+
+                // Use Avatar wave provider for output
+                waveOut.Init(avatarWaveProvider);
+
+                logger?.LogInformation("Audio initialized for Avatar mode: {sampleRate}Hz, {channels} channels",
+                    AvatarSampleRate, AvatarChannels);
             }
             else
             {
-                session.Session.Avatar = null;
-                Console.WriteLine("\ud83d\udd0a Non-Avatar mode: Standard audio configuration");
-                logger?.LogInformation("Non-Avatar mode: Standard audio configuration");
-            }
+                // Use regular wave provider for output
+                waveOut.Init(waveProvider);
 
-            await client.ConnectAsync(session);
-
-            // Start audio input
-            StartRecording();
-
-            Console.WriteLine("\nReady for conversation!");
-            Console.WriteLine("Commands:");
-            Console.WriteLine("- Press 'R' to start/stop recording");
-            Console.WriteLine("- Press 'P' to start/stop playback");
-            Console.WriteLine("- Press 'M' to switch mode and authentication (requires reconnection)");
-            Console.WriteLine("- Press 'C' to clear audio queue");
-            Console.WriteLine("- Press 'S' to show detailed status");
-            Console.WriteLine("- Press 'V' to toggle avatar video streaming (Avatar mode only)");
-            Console.WriteLine("- Press 'F' to show avatar streaming information (Avatar mode only)");
-            Console.WriteLine("- Press 'T' to test connection and reconnect if needed");
-            Console.WriteLine("- Press 'Q' to quit");
-
-            // Main loop
-            var running = true;
-            while (running)
-            {
-                var key = Console.ReadKey(true);
-                switch (key.Key)
-                {
-                    case ConsoleKey.R:
-                        ToggleRecording();
-                        break;
-                    case ConsoleKey.P:
-                        TogglePlayback();
-                        break;
-                    case ConsoleKey.M:
-                        await SwitchMode();
-                        break;
-                    case ConsoleKey.C:
-                        ClearAudioQueue();
-                        break;
-                    case ConsoleKey.S:
-                        ShowStatus();
-                        break;
-                    case ConsoleKey.V:
-                        ToggleAvatarVideoStreaming();
-                        break;
-                    case ConsoleKey.F:
-                        StartFFplayForAvatarStreaming();
-                        break;
-                    case ConsoleKey.T:
-                        await TestAndReconnect();
-                        break;
-                    case ConsoleKey.Q:
-                        running = false;
-                        break;
-                }
+                logger?.LogInformation("Audio initialized for regular mode: {sampleRate}Hz, {channels} channel",
+                    SampleRate,
+                    Channels);
             }
         }
-        catch (Exception ex)
+
+        private static void DebugMessages(ServerEvent response)
         {
-            logger.LogError("Error: {ex}", ex);
+            logger?.LogTrace("received: {Type}", response.Type);
         }
-        finally
+
+        private static void DebugMessages(MessageBase response)
         {
-            await Cleanup();
+            logger?.LogTrace("received: {Type}", response.Type);
         }
-    }
 
-    #endregion
-
-    #region Static Fields and Constants
-
-    /// <summary>
-    ///     Audio sample rate in Hz for regular mode.
-    /// </summary>
-    private const int SampleRate = 24000;
-
-    /// <summary>
-    ///     Number of audio channels for regular mode.
-    /// </summary>
-    private const int Channels = 1;
-
-    /// <summary>
-    ///     Bits per audio sample.
-    /// </summary>
-    private const int BitsPerSample = 16;
-
-    /// <summary>
-    ///     Audio sample rate in Hz for Avatar mode (Opus).
-    /// </summary>
-    private const int AvatarSampleRate = 48000;
-
-    /// <summary>
-    ///     Number of audio channels for Avatar mode (Opus).
-    /// </summary>
-    private const int AvatarChannels = 2;
-
-    /// <summary>
-    ///     The VoiceLive API client instance.
-    /// </summary>
-    private static VoiceLiveAPIClientBase client = null!;
-
-    /// <summary>
-    ///     Audio input device for recording.
-    /// </summary>
-    private static WaveInEvent waveIn = null!;
-
-    /// <summary>
-    ///     Audio output device for playback.
-    /// </summary>
-    private static WaveOutEvent waveOut = null!;
-
-    /// <summary>
-    ///     Buffered wave provider for audio playback.
-    /// </summary>
-    private static BufferedWaveProvider waveProvider = null!;
-
-    /// <summary>
-    ///     Buffered wave provider for Avatar audio playback.
-    /// </summary>
-    private static BufferedWaveProvider? avatarWaveProvider;
-
-    /// <summary>
-    ///     Opus decoder for Avatar audio streams.
-    /// </summary>
-    private static IOpusDecoder? opusDecoder;
-
-    /// <summary>
-    ///     Flag indicating if recording is active.
-    /// </summary>
-    private static bool isRecording;
-
-    /// <summary>
-    ///     Flag indicating if playback is active.
-    /// </summary>
-    private static bool isPlaying;
-
-    /// <summary>
-    ///     Logger instance for application logging.
-    /// </summary>
-    private static ILogger? logger;
-
-    /// <summary>
-    ///     Azure AI Services endpoint URL.
-    /// </summary>
-    private static string azureEndpoint = "<your Azure AI Services Endpoint>";
-
-    /// <summary>
-    ///     Azure AI Foundry project name for agent mode.
-    /// </summary>
-    private static string agentProjectName = "<your Azure AI Foundry Project Name>";
-
-    /// <summary>
-    ///     Azure AI agent identifier for agent mode.
-    /// </summary>
-    private static string agentId = "<your Azure AI Agent Id>";
-
-    /// <summary>
-    ///     Token request URL for Azure Identity authentication.
-    /// </summary>
-    private static string azureIdentityTokenRequestUrl = "<Token request url(ex:https://ai.azure.com/.default)>";
-
-    /// <summary>
-    ///     Azure AI Foundry API key for authentication.
-    /// </summary>
-    private static string apiKey = "<Azure AI Foundry API Key>";
-
-    /// <summary>
-    ///     Access token for agent authentication.
-    /// </summary>
-    private static string agentAccessToken = "<Azure AI Foundry API Key>";
-
-    /// <summary>
-    ///     Server message handler manager for handling server responses.
-    /// </summary>
-    private static ServerMessageHandlerManager? serverManager;
-
-    /// <summary>
-    ///     Avatar message handler manager for handling avatar-specific messages.
-    /// </summary>
-    private static AvatarMessageHandlerManager? avatarManager;
-
-    /// <summary>
-    ///     RTP-based avatar video streamer with synchronized A/V playback.
-    /// </summary>
-    private static AvatarVideoStreamer? avatarVideoStreamer;
-
-    /// <summary>
-    ///     Avatar client for WebRTC avatar video streaming.
-    /// </summary>
-    private static AvatarClient? avatarClient;
-
-    /// <summary>
-    ///     Current connection mode for reconnection purposes.
-    /// </summary>
-    private static ConnectionMode currentMode;
-
-    /// <summary>
-    ///     Current authentication type for reconnection purposes.
-    /// </summary>
-    private static AuthenticationType currentAuthType;
-
-    /// <summary>
-    ///     Current access token for reconnection purposes.
-    /// </summary>
-    private static string currentAccessToken = string.Empty;
-
-    private static readonly Queue<byte[]> AudioQueue = new();
-
-    private static Task audioPlaybackTask = Task.CompletedTask;
-
-    #endregion
-
-    #region Private Methods
-
-    /// <summary>
-    ///     Prompts the user to choose a connection mode.
-    /// </summary>
-    /// <returns>The selected connection mode.</returns>
-    private static ConnectionMode ChooseConnectionMode()
-    {
-        Console.WriteLine("Choose connection mode:");
-        Console.WriteLine("1. AI Model Mode");
-        Console.WriteLine("2. AI Agent Mode");
-        Console.WriteLine("3. Avatar Mode (with video streaming)");
-        Console.Write("Enter your choice (1, 2, or 3): ");
-
-        while (true)
+        private static async void OnAudioDataAvailable(object? sender, WaveInEventArgs e)
         {
+            if (!isRecording || e.BytesRecorded <= 0 || voiceLiveSession == null) return;
+
             try
             {
-                var input = Console.ReadLine();
-                if (string.IsNullOrEmpty(input))
-                {
-                    Console.Write("Please enter 1, 2, or 3: ");
-                    continue;
-                }
+                byte[] audioData = new byte[e.BytesRecorded];
+                Array.Copy(e.Buffer, 0, audioData, 0, e.BytesRecorded);
 
-                switch (input.Trim())
-                {
-                    case "1":
-                        Console.WriteLine("Selected: AI Model Mode");
-                        return ConnectionMode.AIModel;
-                    case "2":
-                        Console.WriteLine("Selected: AI Agent Mode");
-                        return ConnectionMode.AIAgent;
-                    case "3":
-                        Console.WriteLine("Selected: Avatar Mode");
-                        return ConnectionMode.Avatar;
-                    default:
-                        Console.Write("Invalid choice. Please enter 1, 2, or 3: ");
-                        break;
-                }
+                await voiceLiveSession.SendInputAudioAsync(audioData);
             }
             catch (Exception ex)
             {
-                logger?.LogError(ex, "Error reading console input");
-                throw;
+                logger?.LogError("Error sending audio data: {Message}", ex.Message);
             }
         }
-    }
 
-    /// <summary>
-    ///     Initializes the VoiceLive API client based on the specified mode.
-    /// </summary>
-    /// <param name="mode">The connection mode to use.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    private static async Task InitializeClientAsync(ConnectionMode mode)
-    {
-        Console.WriteLine("Choose authentication method:");
-        Console.WriteLine("1. API Key");
-        Console.WriteLine("2. Entra ID (DefaultAzureCredential)");
-        Console.Write("Enter your choice (1 or 2): ");
-
-        var authChoice = ChooseAuthMethod();
-        var authMethod = authChoice == 1
-            ? AuthenticationHelper.AuthenticationMethod.ApiKey
-            : AuthenticationHelper.AuthenticationMethod.EntraId;
-
-        string accessToken;
-        AuthenticationType authenticationType;
-
-        try
+        private static void OnRecordingStopped(object? sender, StoppedEventArgs e)
         {
-            accessToken = await AuthenticationHelper.GetAccessTokenAsync(
-                authMethod,
-                apiKey,
-                azureIdentityTokenRequestUrl
-            );
-
-            // Set authentication type based on method
-            authenticationType = authMethod == AuthenticationHelper.AuthenticationMethod.ApiKey
-                ? AuthenticationType.ApiKey
-                : AuthenticationType.BearerToken;
-
-            // Store for reconnection
-            currentAuthType = authenticationType;
-            currentAccessToken = accessToken;
-
-            logger?.LogInformation(" Using {authMethod} authentication (Type: {authenticationType})", authMethod,
-                authenticationType);
-        }
-        catch (Exception ex)
-        {
-            logger?.LogError(" Authentication failed: {ex.Message}", ex.Message);
-            throw;
-        }
-
-        switch (mode)
-        {
-            case ConnectionMode.AIModel:
-                logger?.LogInformation("Initializing AI Model client...");
-                client = new AIModelClient(azureEndpoint, accessToken, authenticationType);
-                break;
-
-            case ConnectionMode.AIAgent:
-                logger?.LogInformation("Initializing AI Agent client...");
-                client = new AIAgentClient(azureEndpoint, accessToken, authenticationType, agentProjectName, agentId);
-                break;
-
-            case ConnectionMode.Avatar:
-                logger?.LogInformation("Initializing Avatar AI Agent client...");
-                client = new AIAgentClient(azureEndpoint, accessToken, authenticationType, agentProjectName, agentId);
-                break;
-
-            default:
-                throw new ArgumentException($"Unsupported mode: {mode}");
-        }
-    }
-
-    /// <summary>
-    ///     Prompts the user to choose an authentication method.
-    /// </summary>
-    /// <returns>The selected authentication method (1 for API Key, 2 for Entra ID).</returns>
-    private static int ChooseAuthMethod()
-    {
-        while (true)
-        {
-            try
+            logger?.LogTrace("Recording stopped");
+            if (e.Exception != null)
             {
-                var input = Console.ReadLine();
-                if (string.IsNullOrEmpty(input))
-                {
-                    Console.Write("Please enter 1 or 2: ");
-                    continue;
-                }
+                logger?.LogError("Recording error: {Message}", e.Exception.Message);
+            }
+        }
 
-                switch (input.Trim())
+        private static void StartRecording()
+        {
+            if (!isRecording)
+            {
+                try
                 {
-                    case "1":
-                        return 1;
-                    case "2":
-                        return 2;
-                    default:
-                        Console.Write("Invalid choice. Please enter 1 or 2: ");
-                        break;
+                    Console.WriteLine("Starting microphone...");
+                    waveIn.StartRecording();
+                    isRecording = true;
+                    Console.WriteLine(
+                        "🎤 Recording Start - Stops automatically when you finish speaking (Manual stop:'R' key)");
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogError("Error starting recording: {Message}", ex.Message);
                 }
             }
-            catch (Exception ex)
+            else
             {
-                logger?.LogError(ex, "Error reading console input for authentication");
-                throw;
+                Console.WriteLine("Already recording");
             }
         }
-    }
 
-    /// <summary>
-    ///     Switches the connection mode and reinitializes the client.
-    /// </summary>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    private static async Task SwitchMode()
-    {
-        try
+        private static void StopRecording()
         {
-            Console.WriteLine("\nSwitching mode...");
+            if (isRecording)
+            {
+                try
+                {
+                    waveIn.StopRecording();
+                    isRecording = false;
+                    Console.WriteLine("Recording stopped");
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogError("Error stopping recording: {Message}", ex.Message);
+                }
+            }
+        }
 
-            // Disconnect current client
+        private static void StartPlayback()
+        {
+            if (waveOut.PlaybackState != PlaybackState.Playing)
+            {
+                try
+                {
+                    waveOut.Play();
+                    isPlaying = true;
+                    Console.WriteLine("Playback started");
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogError("Error starting playback: {Message}", ex.Message);
+                }
+            }
+        }
+
+        private static void StopPlayback()
+        {
+            if (waveOut.PlaybackState == PlaybackState.Playing)
+            {
+                try
+                {
+                    waveOut.Stop();
+                    isPlaying = false;
+                    Console.WriteLine("Playback stopped");
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogError("Error stopping playback: {Message}", ex.Message);
+                }
+            }
+
+            isPlaying = false; // Always reset the flag
+        }
+
+        /// <summary>
+        ///     Toggles audio recording on or off.
+        /// </summary>
+        private static void ToggleRecording()
+        {
+            if (isRecording)
+            {
+                StopRecording();
+            }
+            else
+            {
+                StartRecording();
+            }
+        }
+
+        /// <summary>
+        ///     Toggles audio playback on or off.
+        /// </summary>
+        private static void TogglePlayback()
+        {
+            if (isPlaying)
+            {
+                StopPlayback();
+            }
+            else
+            {
+                StartPlayback();
+            }
+        }
+
+        /// <summary>
+        ///     Clears the audio queue in the VoiceLive session.
+        /// </summary>
+        private static void ClearAudioQueue()
+        {
+            if (voiceLiveSession != null)
+            {
+                Console.WriteLine("Clearing audio queue...");
+                voiceLiveSession.ClearAudioQueue();
+                Console.WriteLine("Audio queue cleared");
+            }
+            else
+            {
+                Console.WriteLine("Session not initialized");
+            }
+        }
+
+        /// <summary>
+        ///     Shows the current status of the application and audio components.
+        /// </summary>
+        private static void ShowStatus()
+        {
+            Console.WriteLine("\n=== Current Status ===");
+            Console.WriteLine($"Recording: {(isRecording ? "ON" : "OFF")}");
+            Console.WriteLine($"Playback: {(isPlaying ? "ON" : "OFF")}");
+            Console.WriteLine($"Connection Mode: {currentMode}");
+            Console.WriteLine($"Auth Method: {(useApiKeyAuth ? "API Key" : "Entra ID")}");
+
+            if (voiceLiveSession != null)
+            {
+                Console.WriteLine($"Connected: {voiceLiveSession.IsConnected}");
+                Console.WriteLine($"Endpoint: {voiceLiveClient?.Endpoint ?? "N/A"}");
+
+                int queueCount = voiceLiveSession.AudioQueueCount;
+                Console.WriteLine($"Audio Queue: {queueCount} chunks");
+            }
+            else
+            {
+                Console.WriteLine("Session: Not initialized");
+            }
+
+            if (waveProvider != null)
+            {
+                TimeSpan bufferedDuration = waveProvider.BufferedDuration;
+                Console.WriteLine($"Buffer Duration: {bufferedDuration.TotalSeconds:F2} seconds");
+            }
+
+            Console.WriteLine("=====================\n");
+        }
+
+        /// <summary>
+        ///     Performs cleanup operations before application exit.
+        /// </summary>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        private static async Task Cleanup()
+        {
+            Console.WriteLine("Cleaning up...");
+
             StopRecording();
             StopPlayback();
 
-            // Cleanup Avatar audio resources before switching
+            waveIn?.Dispose();
+            waveOut?.Dispose();
+            waveProvider = null!;
+
+            // Cleanup Avatar audio resources
             CleanupAudio();
 
-            // Cleanup avatar video streamer before switching
+            // Cleanup avatar video streaming
             if (avatarVideoStreamer != null)
             {
                 avatarVideoStreamer.StopStreaming();
@@ -509,904 +1171,292 @@ internal class Program
             // Cleanup avatar client
             if (avatarClient != null)
             {
-                logger?.LogInformation("Cleaning up avatar client before mode switch");
-                // AvatarClient doesn't have explicit cleanup methods, but setting to null will allow GC
+                logger?.LogInformation("Cleaning up avatar client");
                 avatarClient = null;
             }
 
-            await client.DisconnectAsync();
-            client.Dispose();
+            // Dispose VoiceLiveSession
+            if (voiceLiveSession != null)
+            {
+                await voiceLiveSession.DisposeAsync();
+                voiceLiveSession = null;
+            }
 
-            // Choose new mode
-            var newMode = ChooseConnectionMode();
+            voiceLiveClient = null;
 
-            // Initialize new client
-            await InitializeClientAsync(newMode);
-            SetupClientEvents();
-
-            // Reconnect
-            Console.WriteLine($"Reconnecting in {newMode} mode...");
-            await client.ConnectAsync(ClientSessionUpdate.Default);
-            StartRecording();
-
-            Console.WriteLine("Mode switched successfully!");
+            Console.WriteLine("Goodbye!");
         }
-        catch (Exception ex)
+
+
+        /// <summary>
+        ///     Toggles avatar video streaming.
+        /// </summary>
+        private static void ToggleAvatarVideoStreaming()
         {
-            Console.WriteLine($"Error switching mode: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    ///     Initializes audio input and output components.
-    /// </summary>
-    private static void InitializeAudio()
-    {
-        // Setup audio input (microphone) - same for all modes
-        waveIn = new WaveInEvent
-        {
-            WaveFormat = new WaveFormat(SampleRate, BitsPerSample, Channels),
-            BufferMilliseconds = 100
-        };
-        waveIn.DataAvailable += OnAudioDataAvailable!;
-        waveIn.RecordingStopped += OnRecordingStopped!;
-
-        // Setup audio output (speakers)
-        waveOut = new WaveOutEvent();
-
-        // Initialize regular audio provider (24kHz, mono, 16-bit)
-        waveProvider = new BufferedWaveProvider(new WaveFormat(SampleRate, BitsPerSample, Channels))
-        {
-            BufferLength = SampleRate * Channels * 2 * 10, // 10 seconds buffer
-            DiscardOnBufferOverflow = true
-        };
-
-        // Initialize Avatar audio provider if in Avatar mode (48kHz, stereo, 16-bit)
-        if (currentMode == ConnectionMode.Avatar)
-        {
-            avatarWaveProvider =
-                new BufferedWaveProvider(new WaveFormat(AvatarSampleRate, BitsPerSample, AvatarChannels))
-                {
-                    BufferLength = AvatarSampleRate * AvatarChannels * 2 * 10, // 10 seconds buffer
-                    DiscardOnBufferOverflow = true
-                };
-
-            // Initialize Opus decoder for Avatar audio
             try
             {
-                opusDecoder = OpusCodecFactory.CreateDecoder(AvatarSampleRate, AvatarChannels);
-                logger?.LogInformation("Opus decoder initialized for Avatar mode: {sampleRate}Hz, {channels} channels",
-                    AvatarSampleRate, AvatarChannels);
-            }
-            catch (Exception ex)
-            {
-                logger?.LogError(ex, "Failed to initialize Opus decoder for Avatar mode");
-                throw;
-            }
-
-            // Use Avatar wave provider for output
-            waveOut.Init(avatarWaveProvider);
-
-            logger?.LogInformation("Audio initialized for Avatar mode: {sampleRate}Hz, {channels} channels",
-                AvatarSampleRate, AvatarChannels);
-        }
-        else
-        {
-            // Use regular wave provider for output
-            waveOut.Init(waveProvider);
-
-            logger?.LogInformation("Audio initialized for regular mode: {sampleRate}Hz, {channels} channel", SampleRate,
-                Channels);
-        }
-    }
-
-    /// <summary>
-    ///     Sets up event handlers for the VoiceLive API client.
-    /// </summary>
-    private static void SetupClientEvents()
-    {
-        serverManager = new ServerMessageHandlerManager();
-        avatarManager = new AvatarMessageHandlerManager();
-        client.AddMessageHandlerManager(serverManager);
-
-        // Add avatar manager only if in Avatar mode, prioritize audio handler
-        if (currentMode == ConnectionMode.Avatar)
-        {
-            client.AddMessageHandlerManager(avatarManager);
-            logger?.LogInformation("Avatar mode: Added avatar message handler");
-        }
-        else
-        {
-            logger?.LogInformation("Non-Avatar mode: Using standard message handlers only");
-        }
-
-        // Initialize avatar client for Avatar mode
-        if (currentMode == ConnectionMode.Avatar)
-        {
-            avatarClient = new AvatarClient();
-            logger?.LogInformation("Avatar client initialized for WebRTC streaming");
-        }
-
-        serverManager.OnAudioDeltaReceived += response =>
-        {
-            var pcmData = Convert.FromBase64String(response.Delta);
-
-            // Enhanced logging for Avatar mode audio debugging
-            logger?.LogInformation(
-                "Audio data received via ServerManager - Index:{index}, Mode: {mode}, Size: {size} bytes, Playing: {playing}",
-                response.ContentIndex, currentMode, pcmData.Length, isPlaying);
-
-            // In Avatar mode, skip ServerManager audio processing as it will be handled by AvatarVideoStreamer
-            if (currentMode == ConnectionMode.Avatar)
-            {
-                logger?.LogInformation("Avatar mode: Skipping ServerManager audio processing");
-                return;
-            }
-
-            if (pcmData.Length > 0)
-            {
-                logger?.Log(LogLevel.Debug, "type : {type}, data {size} bytes.", response.Type, pcmData.Length);
-                lock (AudioQueue)
+                if (currentMode != ConnectionMode.Avatar)
                 {
-                    AudioQueue.Enqueue(pcmData);
-
-                    audioPlaybackTask = Task.Run(async () =>
-                    {
-                        var minBuffer = BitsPerSample / 8 * Channels * SampleRate * 3;
-                        while (true)
-                        {
-                            await Task.Delay(300);
-
-                            while (waveProvider.BufferedBytes < waveProvider.BufferLength - minBuffer &&
-                                   AudioQueue.Count > 0)
-                            {
-                                byte[] data;
-                                lock (AudioQueue)
-                                    data = AudioQueue.Dequeue();
-
-                                lock (waveProvider)
-                                {
-                                    waveProvider.AddSamples(data, 0, data.Length);
-                                }
-                            }
-                        }
-                    });
-                }
-
-                // Start audio playback for non-Avatar modes
-                if (!isPlaying)
-                {
-                    logger?.LogInformation("Starting audio playback for {mode} mode", currentMode);
-                    StartAudioPlayback();
-                }
-            }
-            else
-            {
-                logger?.LogWarning("Empty audio data received in {mode} mode", currentMode);
-            }
-        };
-
-        serverManager.OnTranscriptionReceived += transcription =>
-        {
-            logger?.Log(LogLevel.Trace, "[message]: {Transcript}", transcription.Transcript);
-        };
-
-        serverManager.OnSessionUpdateReceived += async sessionUpdate =>
-        {
-            logger?.Log(LogLevel.Trace, "type : {Type}", sessionUpdate.Type);
-
-            if (sessionUpdate.Session.Avatar != null)
-            {
-                if (avatarClient == null)
-                {
-                    logger?.LogError(
-                        "Avatar session received but avatarClient is null - this should not happen in Avatar mode");
+                    Console.WriteLine("⚠️ Video streaming is only available in Avatar mode");
                     return;
                 }
 
-                var ics = sessionUpdate.Session.Avatar.IceServers[0];
-                logger?.LogInformation("Starting WebRTC connection with ICE servers: {urls}",
-                    string.Join(", ", ics.Urls));
-                await avatarClient.AvatarConnectAsync(ics, client);
-                logger?.LogInformation("WebRTC connection initiated successfully");
+                if (avatarVideoStreamer == null)
+                {
+                    Console.WriteLine("⚠️ Avatar video streamer not initialized. Connect to avatar first.");
+                    return;
+                }
 
-                // Initialize avatar video streaming (RTP-based V6)
-                if (currentMode == ConnectionMode.Avatar && avatarVideoStreamer == null)
+                Console.WriteLine("🎥 Avatar RTP streaming is active");
+                Console.WriteLine("   - Status: Real-time synchronized audio/video playback");
+                Console.WriteLine("   - Video window opens automatically when streaming starts");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error toggling video streaming: {ex.Message}");
+                logger?.LogError(ex, "Error toggling avatar video streaming");
+            }
+        }
+
+        /// <summary>
+        ///     Shows information about avatar streaming (file output removed for performance).
+        /// </summary>
+        private static void StartFFplayForAvatarStreaming()
+        {
+            try
+            {
+                if (currentMode != ConnectionMode.Avatar)
+                {
+                    Console.WriteLine("⚠️ Avatar streaming is only available in Avatar mode");
+                    return;
+                }
+
+                if (avatarVideoStreamer == null)
+                {
+                    Console.WriteLine("⚠️ Avatar video streamer not initialized. Connect to avatar first.");
+                    return;
+                }
+
+                Console.WriteLine("ℹ️ Avatar streaming information:");
+                Console.WriteLine("   - Real-time RTP streaming is active");
+                Console.WriteLine("   - Video window opens automatically when streaming starts");
+                Console.WriteLine("   - File output has been removed for performance optimization");
+                Console.WriteLine("   - All playback is real-time only");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error showing streaming information: {ex.Message}");
+                logger?.LogError(ex, "Error showing avatar streaming information");
+            }
+        }
+
+        /// <summary>
+        ///     Starts audio playback if not already playing.
+        /// </summary>
+        private static void StartAudioPlayback()
+        {
+            if (waveOut != null && waveOut.PlaybackState != PlaybackState.Playing)
+            {
+                try
+                {
+                    waveOut.Play();
+                    isPlaying = true;
+                    logger?.LogInformation("Audio playback started");
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogError(ex, "Error starting audio playback");
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Tests connection and reconnects if needed.
+        /// </summary>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        private static async Task TestAndReconnect()
+        {
+            try
+            {
+                Console.WriteLine("\n🔄 Testing connection...");
+
+                // Check connection state
+                bool isConnected = TestConnection();
+
+                if (isConnected)
+                {
+                    Console.WriteLine("✅ Connection is healthy");
+                    return;
+                }
+
+                Console.WriteLine("🔧 Connection issues detected, attempting reconnection...");
+
+                // Stop current activities
+                StopRecording();
+                StopPlayback();
+
+                // Cleanup Avatar audio resources before reconnection
+                CleanupAudio();
+
+                // Cleanup avatar video streaming before reconnection
+                if (avatarVideoStreamer != null)
+                {
+                    avatarVideoStreamer.StopStreaming();
+                    avatarVideoStreamer.Dispose();
+                    avatarVideoStreamer = null;
+                }
+
+                // Dispose current session
+                if (voiceLiveSession != null)
                 {
                     try
                     {
-                        avatarVideoStreamer = new AvatarVideoStreamer(avatarClient,
-                            logger ?? throw new NullReferenceException("logger is null.jjj"));
-
-                        if (!avatarVideoStreamer.StartStreaming())
-                        {
-                            logger?.LogError("Failed to start avatar video streaming - check FFmpeg availability");
-                            avatarVideoStreamer?.Dispose();
-                            avatarVideoStreamer = null;
-                        }
+                        await voiceLiveSession.DisposeAsync();
                     }
                     catch (Exception ex)
                     {
-                        logger?.LogError(ex, "Exception during avatar video streaming initialization");
-                        avatarVideoStreamer?.Dispose();
-                        avatarVideoStreamer = null;
+                        logger?.LogWarning(ex, "Error disposing session during reconnection");
                     }
+
+                    voiceLiveSession = null;
                 }
 
-                // Ensure audio is ready for Avatar mode
-                logger?.LogInformation("Avatar connected, audio playback prepared");
-            }
+                // Wait a moment before reconnecting
+                await Task.Delay(1000);
 
-            StartRecording();
-        };
+                // Recreate client with stored credentials
+                RecreateClient();
 
-        avatarManager.OnSessionAvatarConnecting += connecting =>
-        {
-            logger?.Log(LogLevel.Debug, "type : {Type}", connecting.Type);
+                // Start new session
+                Console.WriteLine($"🔄 Reconnecting in {currentMode} mode...");
+                VoiceLiveSessionOptions sessionOptions = CreateSessionOptions(currentMode);
 
-            if (avatarClient == null)
-            {
-                logger?.LogError("Avatar connecting event received but avatarClient is null");
-                return;
-            }
-
-            logger?.LogTrace("Setting remote SDP for WebRTC connection");
-            avatarClient.AvatarConnecting(connecting.ServerSdp);
-            logger?.LogTrace("Remote SDP set successfully, WebRTC connection should be established");
-        };
-
-        serverManager.OnErrorReceived += response =>
-        {
-            logger?.LogError("Error received: {Type} - {Response}", response.Type, JsonSerializer.Serialize(response));
-            if (response.ErrorDetail != null)
-            {
-                logger?.LogError("   Code: {Code}", response.ErrorDetail.Code);
-                logger?.LogError("   Message: {Message}", response.ErrorDetail.Message);
-                if (!string.IsNullOrEmpty(response.ErrorDetail.Type))
+                if (currentMode == ConnectionMode.AIModel)
                 {
-                    logger?.LogError("   Type: {ErrorType}", response.ErrorDetail.Type);
+                    voiceLiveSession = await voiceLiveClient!.StartSessionAsync(sessionOptions);
                 }
-            }
-        };
-
-        serverManager.OnResponseTextDoneReceived += response =>
-        {
-            logger?.LogTrace("{Type} : {Text}", response.Type, response.Text);
-        };
-
-
-        serverManager.OnConversationCreatedReceived += DebugMessages;
-        serverManager.OnConversationItemCreatedReceived += response =>
-        {
-            var transcripts = "";
-            if (response.Item?.Content != null && response.Item.Content.Length > 0)
-            {
-                transcripts = response.Item?.Content?.Select(x => x.Transcript).Aggregate((a, b) => a + "\n" + b) ?? "";
-            }
-
-            logger?.LogTrace(" {role}: {transcripts}", response.Item?.Role, transcripts);
-        };
-        serverManager.OnConversationItemRetrievedReceived += DebugMessages;
-        serverManager.OnConversationItemDeletedReceived += DebugMessages;
-        serverManager.OnConversationItemInputAudioTranscriptionFailedReceived += DebugMessages;
-        serverManager.OnConversationItemTruncatedReceived += DebugMessages;
-        serverManager.OnInputAudioBufferClearedReceived += DebugMessages;
-        serverManager.OnInputAudioBufferCommittedReceived += DebugMessages;
-        serverManager.OnInputAudioBufferSpeechStartedReceived += DebugMessages;
-        serverManager.OnInputAudioBufferSpeechStoppedReceived += DebugMessages;
-
-        // Auto-stop recording when speech is detected as stopped by Azure AI
-        serverManager.OnInputAudioBufferSpeechStoppedReceived += message =>
-        {
-            if (isRecording)
-            {
-                logger?.LogTrace("🔇 Speech stopped detected (audio_end: {ms}ms) - auto-stopping recording",
-                    message.AudioEndMs);
-                StopRecording();
-            }
-        };
-        serverManager.OnOutputAudioBufferClearedReceived += DebugMessages;
-        serverManager.OnOutputAudioBufferStartedReceived += DebugMessages;
-        serverManager.OnOutputAudioBufferStoppedReceived += DebugMessages;
-        serverManager.OnRateLimitsUpdatedReceived += DebugMessages;
-        serverManager.OnResponseAnimationVisemeDoneReceived += DebugMessages;
-        serverManager.OnResponseAnimationVisemeDeltaReceived += DebugMessages;
-        serverManager.OnResponseAudioDoneReceived += DebugMessages;
-        serverManager.OnResponseAudioTranscriptDeltaReceived += DebugMessages;
-        serverManager.OnResponseAudioTranscriptDoneReceived += DebugMessages;
-        serverManager.OnResponseContentPartAddedReceived += DebugMessages;
-        serverManager.OnResponseContentPartDoneReceived += DebugMessages;
-        serverManager.OnResponseCreatedReceived += DebugMessages;
-        serverManager.OnResponseDoneReceived += DebugMessages;
-        serverManager.OnResponseFunctionCallArgumentsDeltaReceived += DebugMessages;
-        serverManager.OnResponseFunctionCallArgumentsDoneReceived += DebugMessages;
-        serverManager.OnResponseOutputItemAddedReceived += DebugMessages;
-        serverManager.OnResponseOutputItemDoneReceived += response =>
-        {
-            Console.WriteLine(
-                " {0}: {1}", response.Item.Role,
-                response.Item.Content?.Select(x => x.Transcript).Aggregate((a, b) => a + "\n" + b));
-        };
-        serverManager.OnResponseTextDeltaReceived += DebugMessages;
-        serverManager.OnSessionCreatedReceived += DebugMessages;
-    }
-
-    private static void DebugMessages(MessageBase response)
-    {
-        logger?.LogTrace("received: {Type}", response.Type);
-    }
-
-    private static async void OnAudioDataAvailable(object? sender, WaveInEventArgs e)
-    {
-        if (client != null && isRecording && e.BytesRecorded > 0)
-        {
-            try
-            {
-                var audioData = new byte[e.BytesRecorded];
-                Array.Copy(e.Buffer, 0, audioData, 0, e.BytesRecorded);
-
-                await new InputAudioBufferAppend().SendAsync(audioData, client);
-            }
-            catch (Exception ex)
-            {
-                logger?.LogError("Error sending audio data: {Message}", ex.Message);
-            }
-        }
-    }
-
-    private static void OnRecordingStopped(object? sender, StoppedEventArgs e)
-    {
-        logger?.LogTrace("Recording stopped");
-        if (e.Exception != null)
-        {
-            logger?.LogError("Recording error: {Message}", e.Exception.Message);
-        }
-    }
-
-    private static void StartRecording()
-    {
-        if (!isRecording)
-        {
-            try
-            {
-                Console.WriteLine("Starting microphone...");
-                waveIn.StartRecording();
-                isRecording = true;
-                Console.WriteLine(
-                    "🎤 Recording Start - Stops automatically when you finish speaking (Manual stop:'R' key)");
-            }
-            catch (Exception ex)
-            {
-                logger?.LogError("Error starting recording: {Message}", ex.Message);
-            }
-        }
-        else
-        {
-            Console.WriteLine("Already recording");
-        }
-    }
-
-    private static void StopRecording()
-    {
-        if (isRecording)
-        {
-            try
-            {
-                waveIn.StopRecording();
-                isRecording = false;
-                Console.WriteLine("Recording stopped");
-            }
-            catch (Exception ex)
-            {
-                logger?.LogError("Error stopping recording: {Message}", ex.Message);
-            }
-        }
-    }
-
-    private static void StartPlayback()
-    {
-        if (!isPlaying)
-        {
-            try
-            {
-                Console.WriteLine("Starting playback...");
-                waveOut.Play();
-                isPlaying = true;
-                Console.WriteLine("Playback started");
-            }
-            catch (Exception ex)
-            {
-                logger?.LogError("Error starting playback: {Message}", ex.Message);
-            }
-        }
-        else
-        {
-            Console.WriteLine("Already playing");
-        }
-    }
-
-    private static void StopPlayback()
-    {
-        if (isPlaying)
-        {
-            try
-            {
-                waveOut.Stop();
-                isPlaying = false;
-                Console.WriteLine("Playback stopped");
-            }
-            catch (Exception ex)
-            {
-                logger?.LogError("Error ⚠️ Audio frame playback: {Message}", ex.Message);
-            }
-        }
-    }
-
-    /// <summary>
-    ///     Toggles audio recording on or off.
-    /// </summary>
-    private static void ToggleRecording()
-    {
-        if (isRecording)
-        {
-            StopRecording();
-        }
-        else
-        {
-            StartRecording();
-        }
-    }
-
-    /// <summary>
-    ///     Toggles audio playback on or off.
-    /// </summary>
-    private static void TogglePlayback()
-    {
-        if (isPlaying)
-        {
-            StopPlayback();
-        }
-        else
-        {
-            StartPlayback();
-        }
-    }
-
-    /// <summary>
-    ///     Clears the audio queue in the VoiceLive API client.
-    /// </summary>
-    private static void ClearAudioQueue()
-    {
-        if (client != null)
-        {
-            Console.WriteLine(" Clearing audio queue...");
-            client.ClearAudioQueue();
-            Console.WriteLine(" Audio queue cleared");
-        }
-        else
-        {
-            Console.WriteLine(" Client not initialized");
-        }
-    }
-
-    /// <summary>
-    ///     Shows the current status of the application and audio components.
-    /// </summary>
-    private static void ShowStatus()
-    {
-        Console.WriteLine("\n=== Current Status ===");
-        Console.WriteLine($"Recording: {(isRecording ? " ON" : " OFF")}");
-        Console.WriteLine($"Playback: {(isPlaying ? " ON" : " OFF")}");
-
-        if (client != null)
-        {
-            // Determine client type and mode
-            if (client is AIModelClient modelClient)
-            {
-                Console.WriteLine("Connection Mode: AI Model");
-                Console.WriteLine($"Model: {modelClient.Model}");
-            }
-            else if (client is AIAgentClient agentClient)
-            {
-                Console.WriteLine("Connection Mode: AI Agent");
-                Console.WriteLine($"Project: {agentClient.ProjectName}");
-                Console.WriteLine($"Agent ID: {agentClient.AgentId}");
-            }
-
-            Console.WriteLine("Auth Method: Token-based");
-            Console.WriteLine($"Endpoint: {client.Endpoint}");
-
-            var queueCount = client.GetAudioQueueCount();
-            Console.WriteLine($"Audio Queue: {queueCount} chunks");
-        }
-
-        if (waveProvider != null)
-        {
-            var bufferedDuration = waveProvider.BufferedDuration;
-            Console.WriteLine($"Buffer Duration: {bufferedDuration.TotalSeconds:F2} seconds");
-        }
-
-        Console.WriteLine("=====================\n");
-    }
-
-    /// <summary>
-    ///     Performs cleanup operations before application exit.
-    /// </summary>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    private static async Task Cleanup()
-    {
-        Console.WriteLine("Cleaning up...");
-
-        StopRecording();
-        StopPlayback();
-
-        waveIn?.Dispose();
-        waveOut?.Dispose();
-        waveProvider = null!;
-
-        // Cleanup Avatar audio resources
-        CleanupAudio();
-
-        // Cleanup avatar video streaming
-        if (avatarVideoStreamer != null)
-        {
-            avatarVideoStreamer.StopStreaming();
-            avatarVideoStreamer.Dispose();
-            avatarVideoStreamer = null;
-        }
-
-        // Cleanup avatar client
-        if (avatarClient != null)
-        {
-            logger?.LogInformation("Cleaning up avatar client");
-            avatarClient = null;
-        }
-
-        if (client != null)
-        {
-            await client.DisconnectAsync();
-            client.Dispose();
-        }
-
-
-        Console.WriteLine("Goodbye!");
-    }
-
-
-    /// <summary>
-    ///     Toggles avatar video streaming.
-    /// </summary>
-    private static void ToggleAvatarVideoStreaming()
-    {
-        try
-        {
-            if (currentMode != ConnectionMode.Avatar)
-            {
-                Console.WriteLine("⚠️ Video streaming is only available in Avatar mode");
-                return;
-            }
-
-            if (avatarVideoStreamer == null)
-            {
-                Console.WriteLine("⚠️ Avatar video streamer not initialized. Connect to avatar first.");
-                return;
-            }
-
-            Console.WriteLine("🎥 Avatar RTP streaming is active");
-            Console.WriteLine("   - Status: Real-time synchronized audio/video playback");
-            Console.WriteLine("   - Video window opens automatically when streaming starts");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Error toggling video streaming: {ex.Message}");
-            logger?.LogError(ex, "Error toggling avatar video streaming");
-        }
-    }
-
-    /// <summary>
-    ///     Shows information about avatar streaming (file output removed for performance).
-    /// </summary>
-    private static void StartFFplayForAvatarStreaming()
-    {
-        try
-        {
-            if (currentMode != ConnectionMode.Avatar)
-            {
-                Console.WriteLine("⚠️ Avatar streaming is only available in Avatar mode");
-                return;
-            }
-
-            if (avatarVideoStreamer == null)
-            {
-                Console.WriteLine("⚠️ Avatar video streamer not initialized. Connect to avatar first.");
-                return;
-            }
-
-            Console.WriteLine("ℹ️ Avatar streaming information:");
-            Console.WriteLine("   - Real-time RTP streaming is active");
-            Console.WriteLine("   - Video window opens automatically when streaming starts");
-            Console.WriteLine("   - File output has been removed for performance optimization");
-            Console.WriteLine("   - All playback is real-time only");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Error showing streaming information: {ex.Message}");
-            logger?.LogError(ex, "Error showing avatar streaming information");
-        }
-    }
-
-    /// <summary>
-    ///     Starts audio playback if not already playing.
-    /// </summary>
-    private static void StartAudioPlayback()
-    {
-        if (!isPlaying && waveOut != null)
-        {
-            try
-            {
-                Console.WriteLine("🔊 Starting audio playback...");
-                waveOut.Play();
-                isPlaying = true;
-                Console.WriteLine("✅ Audio playback started");
-                logger?.LogInformation("Audio playback started");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ Error starting audio playback: {ex.Message}");
-                logger?.LogError(ex, "Error starting audio playback");
-            }
-        }
-    }
-
-    /// <summary>
-    ///     Tests connection and reconnects if needed.
-    /// </summary>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    private static async Task TestAndReconnect()
-    {
-        try
-        {
-            Console.WriteLine("\n🔄 Testing connection...");
-
-            if (client == null)
-            {
-                Console.WriteLine("❌ No client initialized");
-                return;
-            }
-
-            // Check connection state
-            var isConnected = await TestConnection();
-
-            if (isConnected)
-            {
-                Console.WriteLine("✅ Connection is healthy");
-                return;
-            }
-
-            Console.WriteLine("🔧 Connection issues detected, attempting reconnection...");
-
-            // Stop current activities
-            StopRecording();
-            StopPlayback();
-
-            // Cleanup Avatar audio resources before reconnection
-            CleanupAudio();
-
-            // Cleanup avatar video streaming before reconnection
-            if (avatarVideoStreamer != null)
-            {
-                avatarVideoStreamer.StopStreaming();
-                avatarVideoStreamer.Dispose();
-                avatarVideoStreamer = null;
-            }
-
-            // Dispose current client
-            if (client != null)
-            {
-                try
+                else
                 {
-                    await client.DisconnectAsync();
-                }
-                catch (Exception ex)
-                {
-                    logger?.LogWarning(ex, "Error disconnecting client during reconnection");
+                    voiceLiveSession = await voiceLiveClient!.StartAgentSessionAsync(
+                        agentProjectName, agentId, sessionOptions);
                 }
 
-                client.Dispose();
-                client = null!;
+                SetupSessionEventHandlers();
+
+                // Restart recording
+                StartRecording();
+
+                Console.WriteLine("✅ Reconnection successful!");
             }
-
-            // Wait a moment before reconnecting
-            await Task.Delay(1000);
-
-            // Recreate client with stored credentials
-            await RecreateClient();
-            SetupClientEvents();
-
-            // Reconnect
-            Console.WriteLine($"🔄 Reconnecting in {currentMode} mode...");
-            var session = CreateClientSessionUpdate(currentMode);
-
-            await client?.ConnectAsync(session)!;
-
-            // Restart recording
-            StartRecording();
-
-            Console.WriteLine("✅ Reconnection successful!");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Reconnection failed: {ex.Message}");
-            logger?.LogError(ex, "Error during reconnection");
-        }
-    }
-
-    /// <summary>
-    /// Create ClientSessionUpdate message adjusted by connection mode in Azure AI Foundry.
-    /// </summary>
-    /// <param name="mode">ConnectionMode</param>
-    /// <returns></returns>
-    /// <exception cref="InvalidOperationException"></exception>
-    private static ClientSessionUpdate CreateClientSessionUpdate(ConnectionMode mode)
-    {
-        ClientSessionUpdate session = ClientSessionUpdate.Default;
-        switch (mode)
-        {
-            case ConnectionMode.AIAgent:
-            case ConnectionMode.AIModel:
-                session.Session.Avatar = null;
-                break;
-            case ConnectionMode.Avatar:
-                session.Session.TurnDetection = new TurnDetection
-                {
-                    Type = "server_vad",
-                    EndOfUtteranceDetection = new
-                    {
-                        model = "semantic_detection_v1",
-                        threshold = 0.1,
-                        timeout = 4
-                    }
-                };
-                session.Session.Avatar = new Avatar
-                {
-                    Character = "lisa",
-                    Style = "casual-sitting",
-                    Customized = false,
-                    Video = new Video
-                    {
-                        BitRate = 2000000,
-                        Codec = "h264",
-                        Crop = new Crop
-                        {
-                            TopLeft = new[] { 560, 0 },
-                            BottomRight = new[] { 1360, 1080 }
-                        },
-                        Resolution = new Resolution
-                        {
-                            Width = 1920,
-                            Height = 1080
-                        },
-                        Background = new Background
-                        {
-                            Color = "#FFFFFFFF"
-                        }
-                    }
-                };
-
-                break;
-            default:
-                throw new InvalidOperationException();
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Reconnection failed: {ex.Message}");
+                logger?.LogError(ex, "Error during reconnection");
+            }
         }
 
-        return session;
-    }
-
-    /// <summary>
-    ///     Tests if the current connection is healthy.
-    /// </summary>
-    /// <returns>True if connection is healthy, false otherwise.</returns>
-    private static async Task<bool> TestConnection()
-    {
-        try
+        /// <summary>
+        ///     Tests if the current connection is healthy.
+        /// </summary>
+        /// <returns>True if connection is healthy, false otherwise.</returns>
+        private static bool TestConnection()
         {
-            if (client == null)
+            try
+            {
+                if (voiceLiveSession == null)
+                    return false;
+
+                // Check if session is connected
+                if (!voiceLiveSession.IsConnected)
+                    return false;
+
+                // Try to clear audio queue as a simple connection test
+                voiceLiveSession.ClearAudioQueue();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                logger?.LogWarning(ex, "Connection test failed");
                 return false;
-
-            // Try to clear audio queue as a simple connection test
-            client.ClearAudioQueue();
-
-            // Wait a short time to see if any immediate errors occur
-            await Task.Delay(100);
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            logger?.LogWarning(ex, "Connection test failed");
-            return false;
-        }
-    }
-
-    /// <summary>
-    ///     Recreates the client with stored credentials.
-    /// </summary>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    private static Task RecreateClient()
-    {
-        try
-        {
-            switch (currentMode)
-            {
-                case ConnectionMode.AIModel:
-                    logger?.LogInformation("Recreating AI Model client...");
-                    client = new AIModelClient(azureEndpoint, currentAccessToken, currentAuthType);
-                    break;
-
-                case ConnectionMode.AIAgent:
-                    logger?.LogInformation("Recreating AI Agent client...");
-                    client = new AIAgentClient(azureEndpoint, currentAccessToken, currentAuthType, agentProjectName,
-                        agentId);
-                    break;
-
-                case ConnectionMode.Avatar:
-                    logger?.LogInformation("Recreating Avatar AI Agent client...");
-                    client = new AIAgentClient(azureEndpoint, currentAccessToken, currentAuthType, agentProjectName,
-                        agentId);
-                    break;
-
-                default:
-                    throw new ArgumentException($"Unsupported mode: {currentMode}");
             }
-
-            return Task.CompletedTask;
         }
-        catch (Exception ex)
-        {
-            logger?.LogError(ex, "Error recreating client");
-            throw;
-        }
-    }
 
-    /// <summary>
-    ///     Cleans up Avatar audio resources by properly disposing of avatarWaveProvider and opusDecoder.
-    /// </summary>
-    private static void CleanupAudio()
-    {
-        try
+        /// <summary>
+        ///     Recreates the VoiceLiveClient with stored credentials.
+        /// </summary>
+        private static void RecreateClient()
         {
-            // Dispose of Avatar wave provider
-            if (avatarWaveProvider != null)
+            try
             {
-                try
-                {
-                    avatarWaveProvider.ClearBuffer();
-                    logger?.LogInformation("Avatar wave provider cleared and disposed");
-                }
-                catch (Exception ex)
-                {
-                    logger?.LogWarning(ex, "Error clearing avatar wave provider buffer");
-                }
-                finally
-                {
-                    avatarWaveProvider = null;
-                }
-            }
+                logger?.LogInformation("Recreating VoiceLiveClient...");
 
-            // Reset Opus decoder reference
-            if (opusDecoder != null)
+                if (useApiKeyAuth)
+                {
+                    voiceLiveClient = new VoiceLiveClient(azureEndpoint, new AzureKeyCredential(apiKey));
+                }
+                else
+                {
+                    voiceLiveClient = new VoiceLiveClient(
+                        azureEndpoint,
+                        new DefaultAzureCredential(),
+                        new[] { azureIdentityTokenRequestUrl });
+                }
+
+                voiceLiveClient.AgentProjectName = agentProjectName;
+                voiceLiveClient.AgentId = agentId;
+                voiceLiveClient.AgentAccessToken = agentAccessToken;
+
+                logger?.LogInformation("VoiceLiveClient recreated successfully");
+            }
+            catch (Exception ex)
             {
-                opusDecoder = null;
-                logger?.LogInformation("Opus decoder reset");
+                logger?.LogError(ex, "Error recreating client");
+                throw;
             }
-
-            Console.WriteLine("🧹 Avatar audio resources cleaned up");
         }
-        catch (Exception ex)
+
+        /// <summary>
+        ///     Cleans up Avatar audio resources by properly disposing of avatarWaveProvider and opusDecoder.
+        /// </summary>
+        private static void CleanupAudio()
         {
-            logger?.LogError(ex, "Error during avatar audio cleanup");
-            Console.WriteLine($"⚠️ Warning: Error cleaning up avatar audio resources: {ex.Message}");
-        }
-    }
+            try
+            {
+                // Dispose of Avatar wave provider
+                if (avatarWaveProvider != null)
+                {
+                    try
+                    {
+                        avatarWaveProvider.ClearBuffer();
+                        logger?.LogInformation("Avatar wave provider cleared and disposed");
+                    }
+                    catch (Exception ex)
+                    {
+                        logger?.LogWarning(ex, "Error clearing avatar wave provider buffer");
+                    }
+                    finally
+                    {
+                        avatarWaveProvider = null;
+                    }
+                }
 
-    #endregion
+                // Reset Opus decoder reference
+                if (opusDecoder != null)
+                {
+                    opusDecoder = null;
+                    logger?.LogInformation("Opus decoder reset");
+                }
+
+                Console.WriteLine("🧹 Avatar audio resources cleaned up");
+            }
+            catch (Exception ex)
+            {
+                logger?.LogError(ex, "Error during avatar audio cleanup");
+                Console.WriteLine($"⚠️ Warning: Error cleaning up avatar audio resources: {ex.Message}");
+            }
+        }
+
+        #endregion
+    }
 }

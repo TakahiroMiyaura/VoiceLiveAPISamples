@@ -1,8 +1,10 @@
-﻿// Copyright (c) 2025 Takahiro Miyaura
+﻿// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
+using System;
 using System.Text.Json.Serialization;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commands;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts;
 
@@ -11,12 +13,34 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Client.Messages
     /// <summary>
     ///     Represents a message indicating that a client session has been updated.
     /// </summary>
-    public class ClientSessionUpdate : MessageBase, IClientSessionUpdate
+    [Obsolete(
+        "This class is obsolete. Use Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commands.Messages.ClientSessionUpdate instead.")]
+    public class ClientSessionUpdate : ClientCommand, IClientSessionUpdate
     {
+        #region Static Fields and Constants
+
         /// <summary>
         ///     The type of the message, indicating a session update.
         /// </summary>
         public const string TypeName = "session.update";
+
+        #endregion
+
+        #region Constructors
+
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="ClientSessionUpdate" /> class.
+        /// </summary>
+        public ClientSessionUpdate()
+        {
+        }
+
+        #endregion
+
+        #region Properties
+
+        /// <inheritdoc />
+        public override string Type => TypeName;
 
         /// <summary>
         ///     Gets or sets the updated client session details.
@@ -28,7 +52,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Client.Messages
         ///     クライアントセッション更新メッセージのデフォルト値を設定します。
         /// </summary>
         /// <returns>デフォルト値が設定されたクライアントセッション更新メッセージ。</returns>
-        public static ClientSessionUpdate Default => new ClientSessionUpdate()
+        public static ClientSessionUpdate Default => new ClientSessionUpdate
         {
             Session = new ClientSession
             {
@@ -84,12 +108,6 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Client.Messages
             }
         };
 
-        /// <summary>
-        ///     Initializes a new instance of the <see cref="ClientSessionUpdate" /> class.
-        /// </summary>
-        public ClientSessionUpdate()
-        {
-            Type = TypeName;
-        }
+        #endregion
     }
 }

@@ -124,69 +124,131 @@ Commands:
 - **Audio Integration**: Opus audio capture and MPEGTS multiplexing
 - **FFplay Integration**: Press 'F' to launch video playback
 
-#### AI Model Mode
+#### AI Model Mode (New API - Recommended)
 ```csharp
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients;
+using Azure;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Server;
 
-var client = new AIModelClient(token);
-client.OnResponseAudioDelta += (audioData) => {
+// Create client with Azure SDK credential
+var client = new VoiceLiveClient(
+    "https://your-endpoint.cognitiveservices.azure.com",
+    new AzureKeyCredential("your-api-key"));
+
+// Start session with model
+var session = await client.StartSessionAsync("gpt-4o-realtime-preview");
+
+// Setup event handlers
+var messageHandler = new ServerMessageHandlerManager();
+messageHandler.OnResponseAudioDelta += (audioData) => {
     // Handle received audio
 };
-await client.ConnectAsync();
+session.AddMessageHandlerManager(messageHandler);
+
+// Send audio data
+await session.SendInputAudioAsync(audioBytes);
 ```
 
-#### AI Agent Mode
+#### AI Agent Mode (New API - Recommended)
 ```csharp
-var client = new AIAgentClient(token, agentProjectName, agentId);
-client.OnResponseAudioDelta += (audioData) => {
+using Azure;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Server;
+
+// Create client with Azure SDK credential
+var client = new VoiceLiveClient(
+    "https://your-endpoint.cognitiveservices.azure.com",
+    new AzureKeyCredential("your-api-key"));
+
+// Configure agent settings
+client.AgentAccessToken = "your-agent-access-token";
+
+// Start agent session
+var session = await client.StartAgentSessionAsync(
+    "your-project-name",
+    "your-agent-id");
+
+// Setup event handlers
+var messageHandler = new ServerMessageHandlerManager();
+messageHandler.OnResponseAudioDelta += (audioData) => {
     // Handle received audio
 };
-await client.ConnectAsync();
+session.AddMessageHandlerManager(messageHandler);
+
+// Send audio data
+await session.SendInputAudioAsync(audioBytes);
 ```
 
-#### Avatar Mode
+#### Avatar Mode (New API - Recommended)
 ```csharp
+using Azure;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars;
 
-var avatarClient = new AvatarClient(token);
-var videoStreamer = new AvatarVideoStreamer(avatarClient, logger);
+// Create client
+var client = new VoiceLiveClient(endpoint, new AzureKeyCredential(apiKey));
+var session = await client.StartAgentSessionAsync(projectName, agentId);
+
+// Create avatar client for WebRTC
+var avatarClient = new AvatarClient();
 
 // Subscribe to video/audio frames
-avatarClient.OnVideoFrameReceived += (remote, ssrc, frame, format) => {
+avatarClient.OnVideoFrameReceived += (remote, ssrc, frame, format, timestamp) => {
     // Handle H.264 video frames
 };
-avatarClient.OnAudioFrameReceived += (audioData) => {
+avatarClient.OnAudioFrameReceived += (audioData, timestamp) => {
     // Handle Opus audio frames
 };
 
-// Start video streaming
-videoStreamer.StartStreaming();
-await avatarClient.ConnectAsync();
+// Connect avatar with session
+await avatarClient.AvatarConnectAsync(iceServers, session);
+```
+
+#### Legacy API (Deprecated)
+```csharp
+// The legacy AIModelClient and AIAgentClient are deprecated.
+// Please migrate to the new VoiceLiveClient/VoiceLiveSession API.
+// See docs/MIGRATION_GUIDE.md for migration instructions.
 ```
 
 ## 📖 API Reference
 
-### Core Classes
+### Core Classes (New API)
 
-- `AIModelClient`: For direct AI model connections
-- `AIAgentClient`: For AI agent connections  
-- `AvatarClient`: For WebRTC video streaming connections
+- `VoiceLiveClient`: Main entry point for creating VoiceLive sessions
+- `VoiceLiveSession`: Manages WebSocket connection and message handling
+- `VoiceLiveSessionOptions`: Configuration options for session behavior
+- `VoiceLiveCredential`: Unified credential handling (API Key / Token)
+- `ServerMessageHandlerManager`: Event-based message processing
+
+### Avatar Classes
+
+- `AvatarClient`: WebRTC video streaming via SIPSorcery
 - `AvatarVideoStreamer`: H.264 video and Opus audio processing
 - `H264StreamReconstructor`: SPS/PPS header injection for stream continuity
 - `H264StreamAnalyzer`: NAL unit analysis and debugging
-- `VoiceLiveHandlerBase`: Base handler for custom event processing
+- `AvatarMessageHandlerManager`: Avatar-specific message handling
 
-### Key Events
+### Key Session Methods
+
+- `StartSessionAsync(model)`: Start a model session
+- `StartAgentSessionAsync(projectName, agentId)`: Start an agent session
+- `SendInputAudioAsync(audioData)`: Send audio to the session
+- `ConfigureSessionAsync(options)`: Update session configuration
+- `ClearAudioQueue()`: Clear local audio output queue
+
+### Key Events (via ServerMessageHandlerManager)
 
 - `OnResponseAudioDelta`: Handles incoming audio data
-- `OnVideoFrameReceived`: Handles H.264 video frames (Avatar mode)
-- `OnAudioFrameReceived`: Handles Opus audio frames (Avatar mode)
-- `OnSessionCreated`: Handles session establishment
+- `OnSessionCreated`: Session creation confirmation
+- `OnSessionUpdated`: Session configuration update confirmation
+- `OnTranscriptionCompleted`: Speech-to-text result
+- `OnError`: Error handling
 
-### Avatar Processing Classes
+### Legacy Classes (Deprecated)
 
-- `H264StreamAnalyzer`: NAL unit analysis and debugging
-- `AvatarMessageHandlerManager`: Avatar-specific message handling
+- `AIModelClient`: Use `VoiceLiveClient.StartSessionAsync()` instead
+- `AIAgentClient`: Use `VoiceLiveClient.StartAgentSessionAsync()` instead
 
 ## 📜 License
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Takahiro Miyaura
+// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
@@ -15,6 +15,8 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Server.Handlers
     /// <summary>
     ///     Handles conversation Item deleted messages.
     /// </summary>
+    [Obsolete(
+        "This class is obsolete. Use Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Handlers.ConversationItemDeletedHandler instead.")]
     public class ConversationItemDeletedHandler : VoiceLiveHandlerBase<ConversationItemDeletedMessage>
     {
         /// <summary>

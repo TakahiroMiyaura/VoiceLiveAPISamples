@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Takahiro Miyaura
+// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
@@ -14,6 +14,11 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients
     ///     Azure AI Foundry VoiceInfo Live API client for AI Agent mode.
     ///     Provides connection to custom AI agents with real-time audio communication.
     /// </summary>
+    /// <remarks>
+    ///     This class is deprecated. Use <see cref="VoiceLiveClient" /> with
+    ///     <see cref="VoiceLiveClient.StartAgentSessionAsync" /> instead for a more modern API.
+    /// </remarks>
+    [Obsolete("Use VoiceLiveClient.StartAgentSessionAsync() instead. This class will be removed in a future version.")]
     public class AIAgentClient : VoiceLiveAPIClientBase
     {
         #region Constructors
@@ -116,7 +121,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients
             // URL encode the agent access token to handle special characters
             var encodedToken = AgentAccessToken;
             var uri =
-                $"{agentBaseUri}/voice-live/realtime?api-version={ApiVersion}&agent-project-name={ProjectName}&agent-id={AgentId}&agent-access-token={encodedToken}";
+                $"{agentBaseUri}/voice-live/realtime?api-version={ApiVersion}&agent-project-name={ProjectName}&agent-id={AgentId}"; //&agent-access-token={encodedToken}";
 
             // Debug logging for troubleshooting
             Logger.LogDebug("Agent Access Token: {maskedToken} (length: {AgentAccessToken.Length})", maskedToken,

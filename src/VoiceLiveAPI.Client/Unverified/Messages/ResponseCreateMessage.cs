@@ -1,10 +1,11 @@
-// Copyright (c) 2025 Takahiro Miyaura
+// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
+using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commands;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts.Unverified;
 
 namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Client.Unverified.Messages
@@ -12,13 +13,31 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Client.Unverified.Messages
     /// <summary>
     ///     Represents a response create message.
     /// </summary>
-    public class ResponseCreateMessage : MessageBase
+    [Obsolete(
+        "This class is obsolete. Use Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commands.Messages.Unverified.ResponseCreateMessage instead.")]
+    public class ResponseCreateMessage : ClientCommand
     {
+        #region Static Fields and Constants
+
+        /// <summary>
+        ///     The type identifier for this message.
+        /// </summary>
+        public const string TypeName = "response.create";
+
+        #endregion
+
+        #region Properties
+
+        /// <inheritdoc />
+        public override string Type => TypeName;
+
         /// <summary>
         ///     Gets or sets the response configuration.
         /// </summary>
         [JsonPropertyName("response")]
         public ResponseOptionsMessage Response { get; set; } = null;
+
+        #endregion
     }
 
     /// <summary>
