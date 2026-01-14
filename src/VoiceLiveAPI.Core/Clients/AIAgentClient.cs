@@ -119,7 +119,6 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients
                 : "***";
 
             // URL encode the agent access token to handle special characters
-            var encodedToken = AgentAccessToken;
             var uri =
                 $"{agentBaseUri}/voice-live/realtime?api-version={ApiVersion}&agent-project-name={ProjectName}&agent-id={AgentId}"; //&agent-access-token={encodedToken}";
 

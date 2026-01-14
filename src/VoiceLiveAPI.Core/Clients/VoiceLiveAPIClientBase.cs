@@ -244,7 +244,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients
         {
             var msg = string.Concat(
                 message.Substring(0, message.Length > maxMessageLength ? maxMessageLength : message.Length), "...");
-            Logger?.Log(level, "{msg}", message);
+            Logger?.Log(level, "{msg}", msg);
         }
 
         /// <summary>

@@ -260,7 +260,13 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
                 session = options
             };
 
+            // Log the session.update content for debugging (use Information level for visibility)
+            var json = System.Text.Json.JsonSerializer.Serialize(message, jsonSerializerOptions);
+            Logger?.LogInformation("Sending session.update (Avatar: {hasAvatar})", options.Avatar != null ? "configured" : "null");
+            Logger?.LogDebug("session.update JSON: {json}", json);
+
             await SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
+            Logger?.LogInformation("session.update sent successfully");
         }
 
         /// <summary>
@@ -471,6 +477,8 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         internal async Task ConnectAsync(Func<ClientWebSocket, Task> setupAuthentication,
             CancellationToken cancellationToken = default)
         {
+            Logger?.LogInformation("ConnectAsync starting - Handlers registered: {count}", managers.Count);
+
             if (setupAuthentication != null)
             {
                 await setupAuthentication(webSocket).ConfigureAwait(false);
@@ -480,14 +488,18 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
 
             await webSocket.ConnectAsync(ConnectionUri, cancellationToken).ConfigureAwait(false);
 
+            Logger?.LogInformation("WebSocket connected, state: {state}", webSocket.State);
+
             // Send session configuration
+            Logger?.LogInformation("Sending initial session.update...");
             await ConfigureSessionAsync(Options, cancellationToken).ConfigureAwait(false);
 
             // Start receive loop
+            Logger?.LogInformation("Starting receive and message handling loops...");
             receiveTask = ReceiveLoopAsync();
             messageHandlingTask = MessageHandlingLoopAsync();
 
-            Logger?.LogInformation("Session connected successfully");
+            Logger?.LogInformation("Session connected successfully, waiting for server events...");
         }
 
         #endregion
@@ -577,7 +589,15 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
                         continue;
                     }
 
-                    Logger?.LogDebug("Processing message type: {type}", messageType);
+                    // Use Information level for session events to ensure visibility
+                    if (messageType.StartsWith("session.") || messageType.StartsWith("error"))
+                    {
+                        Logger?.LogInformation("Received message type: {type}", messageType);
+                    }
+                    else
+                    {
+                        Logger?.LogDebug("Processing message type: {type}", messageType);
+                    }
 
                     // Process with traditional handlers
                     var handlerFound = false;

@@ -259,6 +259,9 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
             var uri = BuildConnectionUri(sessionOptions.Model);
             var session = new VoiceLiveSession(uri, sessionOptions);
 
+            // Pass logger to session
+            session.Logger = Logger;
+
             Logger?.LogInformation("Starting session with model: {model}", sessionOptions.Model);
 
             await session.ConnectAsync(SetupAuthenticationAsync, cancellationToken).ConfigureAwait(false);
@@ -277,6 +280,26 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         public async Task<VoiceLiveSession> StartAgentSessionAsync(string projectName, string agentId,
             VoiceLiveSessionOptions sessionOptions = null, CancellationToken cancellationToken = default)
         {
+            return await StartAgentSessionAsync(projectName, agentId, sessionOptions, null, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        /// <summary>
+        ///     Starts a new VoiceLive session for AI Agent mode with pre-registered message handlers.
+        /// </summary>
+        /// <param name="projectName">The AI Agent project name.</param>
+        /// <param name="agentId">The AI Agent ID.</param>
+        /// <param name="sessionOptions">Optional session configuration options.</param>
+        /// <param name="messageHandlers">
+        ///     Message handler managers to register before connecting.
+        ///     This ensures handlers receive all events including session.created and session.updated.
+        /// </param>
+        /// <param name="cancellationToken">A cancellation token.</param>
+        /// <returns>A task that returns the created <see cref="VoiceLiveSession" />.</returns>
+        public async Task<VoiceLiveSession> StartAgentSessionAsync(string projectName, string agentId,
+            VoiceLiveSessionOptions sessionOptions, Commons.MessageHandlerManagerBase[] messageHandlers,
+            CancellationToken cancellationToken = default)
+        {
             if (string.IsNullOrEmpty(projectName))
             {
                 throw new ArgumentNullException(nameof(projectName));
@@ -293,6 +316,18 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
             var options = sessionOptions ?? VoiceLiveSessionOptions.CreateDefault();
             var uri = BuildAgentConnectionUri();
             var session = new VoiceLiveSession(uri, options);
+
+            // Pass logger to session
+            session.Logger = Logger;
+
+            // Register message handlers BEFORE connecting to ensure all events are captured
+            if (messageHandlers != null)
+            {
+                foreach (var handler in messageHandlers)
+                {
+                    session.AddMessageHandlerManager(handler);
+                }
+            }
 
             Logger?.LogInformation("Starting agent session - Project: {project}, Agent: {agent}",
                 projectName, agentId);
