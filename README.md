@@ -6,12 +6,21 @@ A .NET 8 console application and reusable client library for real-time voice con
 
 [![Foundry VoiceLiveAPI AvatarDemo](https://img.youtube.com/vi/lZ5fp42zWNs/0.jpg)](https://www.youtube.com/watch?v=lZ5fp42zWNs)
 
-## 🌟 Features
+## Features
 
 - **Triple Connection Modes**:
   - **AI Model Mode**: Direct connection to Azure AI models (GPT-4o, etc.)
   - **AI Agent Mode**: Connection to custom AI agents with specialized configurations
   - **Avatar Mode**: WebRTC video streaming with real-time H.264 video and Opus audio
+
+- **Multiple Authentication Methods**:
+  - API Key authentication
+  - Azure SDK credential (AzureKeyCredential, TokenCredential)
+  - Bearer Token (for Unity/non-Azure environments)
+
+- **Modern Async Patterns**:
+  - Event-based handlers via `ServerMessageHandlerManager`
+  - IAsyncEnumerable stream pattern via `GetUpdatesAsync()`
 
 ## Required Packages
 
@@ -28,11 +37,12 @@ A .NET 8 console application and reusable client library for real-time voice con
 | Concentus                                    | 2.2.2           | Opus audio codec           |
 | FFMpegCore                                   | 5.1.0           | FFmpeg integration         |
 | CliWrap                                      | 3.6.6           | Command line process wrapper |
+
 ### External Dependencies (Avatar Mode)
 - **FFmpeg**: Required for H.264 video processing and MPEGTS container generation
 - **FFplay**: Required for video playback and testing
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -60,7 +70,7 @@ PS C:\hoge> cd VoiceLiveAPISamples
 
 2. Register the Azure AI Foundry endpoint.
 
-**When using only EntraID login (az login, etc.), ‘AzureAIFoundry:ApiKey’ is not required.**
+**When using only EntraID login (az login, etc.), 'AzureAIFoundry:ApiKey' is not required.**
 
 ```powershell
 PS D:\hoge\VoiceLiveAPISamples> dotnet user-secrets init --project src\VoiceLiveConsoleApp
@@ -82,7 +92,7 @@ PS D:\hoge\VoiceLiveAPISamples > dotnet build src\VoiceLiveConsoleApp
 PS D:\hoge\VoiceLiveAPISamples > dotnet run --project src/VoiceLiveConsoleApp
 ```
 
-## 💻 Usage
+## Usage
 
 ### Console Application
 
@@ -96,7 +106,7 @@ Run the application and choose between AI Model, AI Agent, or Avatar mode:
 ```
 Choose connection mode:
 1. AI Model Mode
-2. AI Agent Mode  
+2. AI Agent Mode
 3. Avatar Mode (with video streaming)
 Enter your choice (1, 2, or 3): 3
 
@@ -124,62 +134,134 @@ Commands:
 - **Audio Integration**: Opus audio capture and MPEGTS multiplexing
 - **FFplay Integration**: Press 'F' to launch video playback
 
-#### AI Model Mode (New API - Recommended)
+## API Reference
+
+### Authentication Methods
+
+The VoiceLive API supports multiple authentication methods:
+
+```csharp
+using Azure;
+using Azure.Identity;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients;
+
+// 1. API Key authentication (simple string)
+var client = new VoiceLiveClient(
+    "https://your-resource.cognitiveservices.azure.com",
+    "your-api-key");
+
+// 2. AzureKeyCredential authentication
+var client = new VoiceLiveClient(
+    endpoint,
+    new AzureKeyCredential(apiKey));
+
+// 3. TokenCredential authentication (Entra ID)
+var client = new VoiceLiveClient(
+    endpoint,
+    new DefaultAzureCredential());
+
+// 4. TokenCredential with custom scopes
+var client = new VoiceLiveClient(
+    endpoint,
+    new DefaultAzureCredential(),
+    new[] { "https://ai.azure.com/.default" });
+
+// 5. Bearer Token (for Unity/non-Azure environments)
+var client = new VoiceLiveClient(
+    endpoint,
+    bearerToken,
+    AuthenticationType.BearerToken);
+```
+
+### AI Model Mode
+
 ```csharp
 using Azure;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Server;
 
-// Create client with Azure SDK credential
+// Create client
 var client = new VoiceLiveClient(
-    "https://your-endpoint.cognitiveservices.azure.com",
+    "https://your-resource.cognitiveservices.azure.com",
     new AzureKeyCredential("your-api-key"));
 
-// Start session with model
-var session = await client.StartSessionAsync("gpt-4o-realtime-preview");
+// Start session with model name
+var session = await client.StartSessionAsync("gpt-4o");
+
+// Or start with custom options
+var options = VoiceLiveSessionOptions.CreateDefault();
+options.Model = "gpt-4o";
+options.Voice = new Voice
+{
+    Name = "ja-JP-Nanami:DragonHDLatestNeural",
+    Type = "azure-standard"
+};
+var session = await client.StartSessionAsync(options);
 
 // Setup event handlers
-var messageHandler = new ServerMessageHandlerManager();
-messageHandler.OnResponseAudioDelta += (audioData) => {
+var serverManager = new ServerMessageHandlerManager();
+serverManager.OnAudioDeltaReceived += (audioDelta) =>
+{
+    byte[] pcmData = Convert.FromBase64String(audioDelta.Delta);
     // Handle received audio
 };
-session.AddMessageHandlerManager(messageHandler);
+serverManager.OnTranscriptionReceived += (transcription) =>
+{
+    Console.WriteLine($"Transcript: {transcription.Transcript}");
+};
+serverManager.OnErrorReceived += (error) =>
+{
+    Console.WriteLine($"Error: {error.Type} - {error.Code}");
+};
+session.AddMessageHandlerManager(serverManager);
 
 // Send audio data
 await session.SendInputAudioAsync(audioBytes);
+
+// Cleanup
+await session.DisposeAsync();
 ```
 
-#### AI Agent Mode (New API - Recommended)
+### AI Agent Mode
+
 ```csharp
 using Azure;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Server;
 
-// Create client with Azure SDK credential
+// Create client
 var client = new VoiceLiveClient(
-    "https://your-endpoint.cognitiveservices.azure.com",
+    "https://your-resource.cognitiveservices.azure.com",
     new AzureKeyCredential("your-api-key"));
 
-// Configure agent settings
+// Set agent access token if required
 client.AgentAccessToken = "your-agent-access-token";
 
-// Start agent session
-var session = await client.StartAgentSessionAsync(
-    "your-project-name",
-    "your-agent-id");
-
-// Setup event handlers
-var messageHandler = new ServerMessageHandlerManager();
-messageHandler.OnResponseAudioDelta += (audioData) => {
+// Create message handlers before connecting
+var serverManager = new ServerMessageHandlerManager();
+serverManager.OnAudioDeltaReceived += (audioDelta) =>
+{
+    byte[] pcmData = Convert.FromBase64String(audioDelta.Delta);
     // Handle received audio
 };
-session.AddMessageHandlerManager(messageHandler);
+serverManager.OnSessionUpdateReceived += (sessionInfo) =>
+{
+    // Session configuration received from server
+    Console.WriteLine($"Session updated: {sessionInfo.Id}");
+};
+
+// Start agent session with handlers registered before connecting
+var session = await client.StartAgentSessionAsync(
+    "your-project-name",
+    "your-agent-id",
+    VoiceLiveSessionOptions.CreateDefault(),
+    new[] { serverManager });
 
 // Send audio data
 await session.SendInputAudioAsync(audioBytes);
 ```
 
-#### Avatar Mode (New API - Recommended)
+### Avatar Mode
+
 ```csharp
 using Azure;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core;
@@ -187,70 +269,259 @@ using Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars;
 
 // Create client
 var client = new VoiceLiveClient(endpoint, new AzureKeyCredential(apiKey));
-var session = await client.StartAgentSessionAsync(projectName, agentId);
+client.AgentAccessToken = "your-agent-access-token";
 
-// Create avatar client for WebRTC
+// Configure avatar options
+var options = VoiceLiveSessionOptions.CreateDefault();
+options.Avatar = new Avatar
+{
+    Character = "lisa",
+    Style = "casual-sitting",
+    Video = new Video
+    {
+        BitRate = 2000000,
+        Codec = "h264",
+        Width = 1920,
+        Height = 1080,
+        FrameRate = 30
+    }
+};
+
+// Create handlers
+var serverManager = new ServerMessageHandlerManager();
+var avatarManager = new AvatarMessageHandlerManager();
 var avatarClient = new AvatarClient();
 
+// Handle avatar connection
+serverManager.OnSessionUpdateReceived += async (sessionInfo) =>
+{
+    if (sessionInfo.Avatar?.IceServers != null)
+    {
+        await avatarClient.AvatarConnectAsync(
+            sessionInfo.Avatar.IceServers[0],
+            session);
+    }
+};
+
+avatarManager.OnSessionAvatarConnecting += (connecting) =>
+{
+    avatarClient.AvatarConnecting(connecting.ServerSdp);
+};
+
 // Subscribe to video/audio frames
-avatarClient.OnVideoFrameReceived += (remote, ssrc, frame, format, timestamp) => {
+avatarClient.OnVideoFrameReceived += (remote, ssrc, frame, format, timestamp) =>
+{
     // Handle H.264 video frames
 };
-avatarClient.OnAudioFrameReceived += (audioData, timestamp) => {
+avatarClient.OnAudioFrameReceived += (audioData, timestamp) =>
+{
     // Handle Opus audio frames
 };
 
-// Connect avatar with session
-await avatarClient.AvatarConnectAsync(iceServers, session);
+// Start session with handlers
+var session = await client.StartAgentSessionAsync(
+    projectName,
+    agentId,
+    options,
+    new MessageHandlerManagerBase[] { serverManager, avatarManager });
+
+// Send audio data
+await session.SendInputAudioAsync(audioBytes);
 ```
 
-#### Legacy API (Deprecated)
+### Using IAsyncEnumerable Pattern (Alternative to Event Handlers)
+
 ```csharp
-// The legacy AIModelClient and AIAgentClient are deprecated.
-// Please migrate to the new VoiceLiveClient/VoiceLiveSession API.
-// See docs/MIGRATION_GUIDE.md for migration instructions.
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.SessionUpdates;
+
+var client = new VoiceLiveClient(endpoint, new AzureKeyCredential(apiKey));
+var session = await client.StartSessionAsync("gpt-4o");
+
+// Use modern async enumerable pattern
+await foreach (var update in session.GetUpdatesAsync())
+{
+    switch (update)
+    {
+        case SessionUpdateResponseAudioDelta audio:
+            // AudioData property provides decoded bytes
+            var audioBytes = audio.AudioData;
+            // Or use Delta property for base64 string
+            break;
+
+        case SessionUpdateSessionCreated created:
+            Console.WriteLine("Session created");
+            break;
+
+        case SessionUpdateSessionUpdated updated:
+            Console.WriteLine("Session updated");
+            break;
+
+        case SessionUpdateTranscriptionCompleted transcription:
+            Console.WriteLine($"Transcript: {transcription.Transcript}");
+            break;
+
+        case SessionUpdateError error:
+            Console.WriteLine($"Error: {error.Code} - {error.Message}");
+            break;
+
+        case SessionUpdateInputAudioBufferSpeechStarted started:
+            Console.WriteLine("Speech started");
+            break;
+
+        case SessionUpdateInputAudioBufferSpeechStopped stopped:
+            Console.WriteLine("Speech stopped");
+            break;
+
+        case SessionUpdateResponseDone done:
+            Console.WriteLine($"Response completed: {done.Status}");
+            break;
+    }
+}
 ```
 
-## 📖 API Reference
+### VoiceLiveSessionOptions
 
-### Core Classes (New API)
+Configure session behavior with `VoiceLiveSessionOptions`:
 
-- `VoiceLiveClient`: Main entry point for creating VoiceLive sessions
-- `VoiceLiveSession`: Manages WebSocket connection and message handling
-- `VoiceLiveSessionOptions`: Configuration options for session behavior
-- `VoiceLiveCredential`: Unified credential handling (API Key / Token)
-- `ServerMessageHandlerManager`: Event-based message processing
+```csharp
+// Create with defaults (Japanese voice, noise reduction, etc.)
+var options = VoiceLiveSessionOptions.CreateDefault();
+
+// Or create with specific Azure voice
+var options = VoiceLiveSessionOptions.CreateWithAzureVoice(
+    "en-US-JennyNeural",
+    "azure-standard");
+
+// Or create minimal configuration
+var options = VoiceLiveSessionOptions.CreateMinimal();
+
+// Customize options
+options.Model = "gpt-4o";
+options.Modalities = new[] { "text", "audio" };
+options.InputAudioFormat = "pcm16";
+options.OutputAudioFormat = "pcm16";
+options.InputAudioSamplingRate = 24000;
+options.Voice = new Voice
+{
+    Name = "ja-JP-Nanami:DragonHDLatestNeural",
+    Type = "azure-standard"
+};
+options.TurnDetection = new TurnDetection
+{
+    Type = "server_vad",
+    Threshold = 0.5f,
+    SilenceDurationMs = 500,
+    CreateResponse = true
+};
+options.InputAudioNoiseReduction = new AudioInputAudioNoiseReductionSettings
+{
+    Type = "azure_deep_noise_suppression"
+};
+options.Animation = new Animation
+{
+    Outputs = new[] { "viseme_id" }
+};
+options.Instructions = "You are a helpful AI assistant.";
+options.Temperature = 0.7f;
+```
+
+### Session Methods
+
+Key methods available on `VoiceLiveSession`:
+
+```csharp
+// Audio input
+await session.SendInputAudioAsync(byte[] audioData);
+await session.SendInputAudioAsync(Stream audioStream, int chunkSize);
+await session.CommitInputAudioAsync();
+await session.ClearInputAudioAsync();
+
+// Text input and function calls
+await session.SendUserMessageAsync("Hello!");
+await session.SendFunctionResultAsync(callId, result);
+
+// Response control
+await session.CreateResponseAsync();
+await session.CancelResponseAsync();
+
+// Session configuration
+await session.ConfigureSessionAsync(options);
+
+// Audio output management
+await session.ClearStreamingAudioAsync();  // Clear server-side buffer
+session.ClearAudioQueue();                  // Clear local queue
+bool hasAudio = session.TryDequeueAudio(out byte[] audioData);
+session.EnqueueAudio(audioData);
+
+// State inspection
+bool connected = session.IsConnected;
+int queueCount = session.AudioQueueCount;
+WebSocketState state = session.State;
+```
+
+### Core Classes
+
+| Class | Description |
+|-------|-------------|
+| `VoiceLiveClient` | Entry point for creating VoiceLive sessions |
+| `VoiceLiveSession` | Manages WebSocket connection and message handling |
+| `VoiceLiveSessionOptions` | Configuration options for session behavior |
+| `VoiceLiveClientOptions` | Configuration options for client behavior |
+| `ServerMessageHandlerManager` | Event-based server message processing |
+| `AvatarMessageHandlerManager` | Avatar-specific message handling |
 
 ### Avatar Classes
 
-- `AvatarClient`: WebRTC video streaming via SIPSorcery
-- `AvatarVideoStreamer`: H.264 video and Opus audio processing
-- `H264StreamReconstructor`: SPS/PPS header injection for stream continuity
-- `H264StreamAnalyzer`: NAL unit analysis and debugging
-- `AvatarMessageHandlerManager`: Avatar-specific message handling
+| Class | Description |
+|-------|-------------|
+| `AvatarClient` | WebRTC video streaming via SIPSorcery |
+| `AvatarVideoStreamer` | H.264 video and Opus audio processing |
+| `H264StreamReconstructor` | SPS/PPS header injection for stream continuity |
+| `H264StreamAnalyzer` | NAL unit analysis and debugging |
 
-### Key Session Methods
+### SessionUpdate Types (for IAsyncEnumerable pattern)
 
-- `StartSessionAsync(model)`: Start a model session
-- `StartAgentSessionAsync(projectName, agentId)`: Start an agent session
-- `SendInputAudioAsync(audioData)`: Send audio to the session
-- `ConfigureSessionAsync(options)`: Update session configuration
-- `ClearAudioQueue()`: Clear local audio output queue
+| Type | Description |
+|------|-------------|
+| `SessionUpdateSessionCreated` | Session initialization confirmed |
+| `SessionUpdateSessionUpdated` | Session configuration updated |
+| `SessionUpdateResponseAudioDelta` | Audio chunk received (base64 encoded) |
+| `SessionUpdateError` | Error from server |
+| `SessionUpdateInputAudioBufferSpeechStarted` | Speech detection started |
+| `SessionUpdateInputAudioBufferSpeechStopped` | Speech detection stopped |
+| `SessionUpdateTranscriptionCompleted` | Speech-to-text result |
+| `SessionUpdateResponseDone` | Response completed |
+| `SessionUpdateConversationItemCreated` | Conversation item created |
+| `SessionUpdateResponseOutputItemDone` | Output item completed |
+| `SessionUpdateUnknown` | Unrecognized message type |
 
-### Key Events (via ServerMessageHandlerManager)
+### Key Events (ServerMessageHandlerManager)
 
-- `OnResponseAudioDelta`: Handles incoming audio data
-- `OnSessionCreated`: Session creation confirmation
-- `OnSessionUpdated`: Session configuration update confirmation
-- `OnTranscriptionCompleted`: Speech-to-text result
-- `OnError`: Error handling
+| Event | Description |
+|-------|-------------|
+| `OnAudioDeltaReceived` | Audio data received |
+| `OnTranscriptionReceived` | Speech-to-text completed |
+| `OnSessionUpdateReceived` | Session configuration updated |
+| `OnSessionCreatedReceived` | Session created |
+| `OnErrorReceived` | Error occurred |
+| `OnInputAudioBufferSpeechStartedReceived` | Speech started |
+| `OnInputAudioBufferSpeechStoppedReceived` | Speech stopped |
+| `OnResponseDoneReceived` | Response completed |
+| `OnResponseAnimationVisemeDeltaReceived` | Viseme animation data |
 
-### Legacy Classes (Deprecated)
+## Migration from Legacy API
 
-- `AIModelClient`: Use `VoiceLiveClient.StartSessionAsync()` instead
-- `AIAgentClient`: Use `VoiceLiveClient.StartAgentSessionAsync()` instead
+The old `AIModelClient` and `AIAgentClient` classes in the `VoiceLiveAPI.Avatars` namespace are deprecated.
 
-## 📜 License
+| Old (Obsolete) | New |
+|----------------|-----|
+| `AIModelClient` | `VoiceLiveClient.StartSessionAsync()` |
+| `AIAgentClient` | `VoiceLiveClient.StartAgentSessionAsync()` |
+| `VoiceLiveAPI.Avatars.AvatarMessageHandlerManager` | `VoiceLiveAPI.Core.AvatarMessageHandlerManager` |
+| `VoiceLiveAPI.Avatars.SessionAvatarConnecting` | `VoiceLiveAPI.Core.Models.AvatarConnecting` |
+
+## License
 
 This project is licensed under the Boost Software License 1.0 - see the [LICENSE](LICENSE) file for details.
 
@@ -260,7 +531,7 @@ This project is licensed under the Boost Software License 1.0 - see the [LICENSE
 - [Quickstart: Create a voice live real-time voice agent with Microsoft Foundry Agent Service(Microsoft Learn)](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live-agents-quickstart?toc=%2Fazure%2Fai-foundry%2Ftoc.json&bc=%2Fazure%2Fai-foundry%2Fbreadcrumb%2Ftoc.json&view=foundry-classic&preserve-view=true&tabs=windows%2Ckeyless&pivots=ai-foundry-portal&wt.mc_id=WDIT-MVP-5003104)
 - [How to use the Voice live API(Microsoft Learn)](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live-how-to?wt.mc_id=WDIT-MVP-5003104)
 
-## 📈 Stats
+## Stats
 
 ![GitHub stars](https://img.shields.io/github/stars/TakahiroMiyaura/VoiceLiveAPISamples?style=social)
 ![GitHub forks](https://img.shields.io/github/forks/TakahiroMiyaura/VoiceLiveAPISamples?style=social)
