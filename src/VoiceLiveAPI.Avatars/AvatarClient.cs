@@ -10,7 +10,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commands.Messages;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Logs;
@@ -72,19 +71,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
         ///     Avatar Audio Frame Received Event.
         /// </summary>
         public event AudioFrameReceivedDelegate OnAudioFrameReceived;
-
-        /// <summary>
-        ///     Send avatar connect message.
-        /// </summary>
-        /// <param name="server">ICE server information.</param>
-        /// <param name="client">Instance of VoiceLiveAPI client.</param>
-        [Obsolete("Use AvatarConnectAsync(IceServers, VoiceLiveSession) instead. This method will be removed in a future version.")]
-        public async Task AvatarConnectAsync(IceServers server, VoiceLiveAPIClientBase client)
-        {
-            var sdpData = await CreateSdpOfferAsync(server);
-            await sdpData.SendAsync(client);
-        }
-
+        
         /// <summary>
         ///     Send avatar connect message using the new VoiceLiveSession API.
         /// </summary>

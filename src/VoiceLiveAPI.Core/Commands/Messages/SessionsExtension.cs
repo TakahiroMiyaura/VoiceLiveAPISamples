@@ -4,7 +4,6 @@
 
 using System;
 using System.Threading.Tasks;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients;
 
 namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commands.Messages
 {
@@ -13,16 +12,6 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commands.Messages
     /// </summary>
     public static class SessionsExtension
     {
-        /// <summary>
-        ///     クライアントセッション更新メッセージを送信します。
-        /// </summary>
-        /// <param name="clientSessionUpdated">送信するクライアントセッション更新メッセージ。</param>
-        /// <param name="client">送信先の VoiceLiveAPI クライアント。</param>
-        [Obsolete("Use SendAsync(VoiceLiveSession) instead. This method will be removed in a future version.")]
-        public static async Task SendAsync(this ClientSessionUpdate clientSessionUpdated, VoiceLiveAPIClientBase client)
-        {
-            await client.SendServerAsync(clientSessionUpdated);
-        }
 
         /// <summary>
         ///     クライアントセッション更新メッセージを送信します。

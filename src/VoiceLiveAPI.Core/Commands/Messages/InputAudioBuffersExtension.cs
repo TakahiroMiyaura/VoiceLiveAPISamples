@@ -4,7 +4,6 @@
 
 using System;
 using System.Threading.Tasks;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Clients;
 
 namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commands.Messages
 {
@@ -13,31 +12,6 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commands.Messages
     /// </summary>
     public static class InputAudioBuffersExtension
     {
-        /// <summary>
-        ///     指定された <see cref="InputAudioBufferAppend" /> を非同期で送信します。
-        /// </summary>
-        /// <param name="inputAudioBufferAppend">送信する <see cref="InputAudioBufferAppend" /> オブジェクト。</param>
-        /// <param name="client">送信先の <see cref="VoiceLiveAPIClientBase" /> クライアント。</param>
-        [Obsolete("Use SendAsync(VoiceLiveSession) instead. This method will be removed in a future version.")]
-        public static async Task SendAsync(this InputAudioBufferAppend inputAudioBufferAppend,
-            VoiceLiveAPIClientBase client)
-        {
-            await client.SendServerAsync(inputAudioBufferAppend);
-        }
-
-        /// <summary>
-        ///     指定された音声データを <see cref="InputAudioBufferAppend" /> に設定し、非同期で送信します。
-        /// </summary>
-        /// <param name="inputAudioBufferAppend">送信する <see cref="InputAudioBufferAppend" /> オブジェクト。</param>
-        /// <param name="audioData">送信する音声データ。</param>
-        /// <param name="client">送信先の <see cref="VoiceLiveAPIClientBase" /> クライアント。</param>
-        [Obsolete("Use SendAsync(byte[], VoiceLiveSession) instead. This method will be removed in a future version.")]
-        public static async Task SendAsync(this InputAudioBufferAppend inputAudioBufferAppend, byte[] audioData,
-            VoiceLiveAPIClientBase client)
-        {
-            inputAudioBufferAppend.Audio = InputAudioBufferAppend.ConvertToBase64(audioData);
-            await client.SendServerAsync(inputAudioBufferAppend);
-        }
 
         /// <summary>
         ///     指定された <see cref="InputAudioBufferAppend" /> を非同期で送信します。

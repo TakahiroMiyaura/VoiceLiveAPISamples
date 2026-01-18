@@ -45,9 +45,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\VoiceLiveAPI.Avatars\VoiceLiveAPI.Avatars.csproj" />
-		<ProjectReference Include="..\VoiceLiveAPI.Client\VoiceLiveAPI.Client.csproj" />
 		<ProjectReference Include="..\VoiceLiveAPI.Core\VoiceLiveAPI.Core.csproj" />
-		<ProjectReference Include="..\VoiceLiveAPI.Server\VoiceLiveAPI.Server.csproj" />
 	</ItemGroup>
 
 </Project>

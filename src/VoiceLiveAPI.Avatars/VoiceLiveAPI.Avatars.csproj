@@ -50,7 +50,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\VoiceLiveAPI.Client\VoiceLiveAPI.Client.csproj" />
     <ProjectReference Include="..\VoiceLiveAPI.Core\VoiceLiveAPI.Core.csproj" />
   </ItemGroup>
 
