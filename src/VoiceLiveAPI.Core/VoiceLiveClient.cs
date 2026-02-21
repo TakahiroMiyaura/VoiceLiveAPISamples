@@ -396,7 +396,6 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
                     Logger?.LogDebug("Using TokenCredential authentication with automatic refresh");
                 }
             }
-
             // Set agent access token if available
             if (!string.IsNullOrEmpty(AgentAccessToken))
             {

@@ -941,9 +941,9 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         }
 
         /// <summary>
-        ///     Event fired when a response function call arguments delta message is processed.
+        ///     Event fired when a function call arguments delta is received.
         /// </summary>
-        public event Action<ResponseFunctionCallArgumentsDeltaMessage> OnResponseFunctionCallArgumentsDeltaReceived
+        public event Action<FunctionCallDelta> OnFunctionCallDeltaReceived
         {
             add
             {
@@ -973,9 +973,9 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         }
 
         /// <summary>
-        ///     Event fired when a response function call arguments done message is processed.
+        ///     Event fired when a function call is completed with all arguments.
         /// </summary>
-        public event Action<ResponseFunctionCallArgumentsDoneMessage> OnResponseFunctionCallArgumentsDoneReceived
+        public event Action<FunctionCallDone> OnFunctionCallDoneReceived
         {
             add
             {

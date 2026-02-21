@@ -22,7 +22,52 @@ A .NET 8 console application and reusable client library for real-time voice con
   - Event-based handlers via `ServerMessageHandlerManager`
   - IAsyncEnumerable stream pattern via `GetUpdatesAsync()`
 
+## Sample Applications
+
+This repository contains two console application samples:
+
+### VoiceLiveConsoleApp (Custom WebSocket Implementation)
+
+A console application utilizing "VoiceLiveAPI.Core," a custom WebSocket library built from scratch based on the Foundry Tools Voice Live API specifications.
+
+- **Direct WebSocket control**: Full control over WebSocket communication
+- **Custom message handling**: Event-based handlers via `ServerMessageHandlerManager`
+- **Legacy compatibility**: Works with existing VoiceLiveAPI.* libraries
+
+### VoiceLiveSDKConsoleApp (Azure.AI.VoiceLive SDK)
+
+A new console application that uses the official **Azure.AI.VoiceLive SDK** package.
+
+- **Official SDK**: Uses Microsoft's official Azure.AI.VoiceLive NuGet package
+- **Simplified API**: `VoiceLiveClient` and `VoiceLiveSession` classes from the SDK
+- **IAsyncEnumerable pattern**: Modern async streaming via `session.GetUpdatesAsync()`
+- **Avatar support**: Uses existing VoiceLiveAPI.Avatars for WebRTC video streaming
+
+| Feature | VoiceLiveConsoleApp | VoiceLiveSDKConsoleApp |
+|---------|---------------------|------------------------|
+| WebSocket Implementation | Custom (VoiceLiveAPI.Core) | Azure.AI.VoiceLive SDK |
+| Session Management | VoiceLiveSession (Core) | VoiceLiveSession (SDK) |
+| Message Handling | ServerMessageHandlerManager events | IAsyncEnumerable pattern |
+| Avatar Video Streaming | VoiceLiveAPI.Avatars | VoiceLiveAPI.Avatars |
+| Authentication | API Key / Entra ID | API Key / Entra ID |
+
+#### Running VoiceLiveSDKConsoleApp
+
+```powershell
+# Build the SDK console application
+PS D:\hoge\VoiceLiveAPISamples > dotnet build src\VoiceLiveSDKConsoleApp
+
+# Run the application
+PS D:\hoge\VoiceLiveAPISamples > dotnet run --project src/VoiceLiveSDKConsoleApp
+```
+
+> [!NOTE]
+> VoiceLiveSDKConsoleApp uses the same user secrets configuration as VoiceLiveConsoleApp.
+> If you have already configured user secrets for VoiceLiveConsoleApp, you can use the same configuration.
+
 ## Required Packages
+
+### VoiceLiveConsoleApp
 
 | Package Name                                 | Version         | Purpose                    |
 |----------------------------------------------|-----------------|----------------------------|
@@ -37,6 +82,15 @@ A .NET 8 console application and reusable client library for real-time voice con
 | Concentus                                    | 2.2.2           | Opus audio codec           |
 | FFMpegCore                                   | 5.1.0           | FFmpeg integration         |
 | CliWrap                                      | 3.6.6           | Command line process wrapper |
+
+### VoiceLiveSDKConsoleApp (Additional)
+
+| Package Name                                 | Version         | Purpose                    |
+|----------------------------------------------|-----------------|----------------------------|
+| Azure.AI.VoiceLive                           | 1.0.0           | Official Azure VoiceLive SDK |
+
+> [!NOTE]
+> VoiceLiveSDKConsoleApp also uses NAudio, Concentus, and SIPSorcery packages for audio/video processing.
 
 ### External Dependencies (Avatar Mode)
 - **FFmpeg**: Required for H.264 video processing and MPEGTS container generation

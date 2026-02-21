@@ -7,10 +7,16 @@ using System.Text.Json.Serialization;
 namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts
 {
     /// <summary>
-    ///     Represents a function with a name, description, and parameters.
+    ///     Represents a function tool definition for the Realtime API.
     /// </summary>
     public class Function
     {
+        /// <summary>
+        ///     Gets or sets the type of the tool. Always "function" for function tools.
+        /// </summary>
+        [JsonPropertyName("type")]
+        public string Type { get; set; } = "function";
+
         /// <summary>
         ///     Gets or sets the name of the function to use.
         /// </summary>

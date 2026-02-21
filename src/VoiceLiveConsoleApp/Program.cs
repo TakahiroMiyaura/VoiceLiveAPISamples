@@ -4,14 +4,17 @@
 
 using System.Text;
 using System.Text.Json;
+using System.Collections.Generic;
 using Azure;
 using Azure.Identity;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commands.Messages;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Events;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Logs;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Models;
 using Concentus;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -133,6 +136,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                 Console.WriteLine("- Press 'M' to switch mode and authentication (requires reconnection)");
                 Console.WriteLine("- Press 'C' to clear audio queue");
                 Console.WriteLine("- Press 'S' to show detailed status");
+                Console.WriteLine("- Press 'I' to send an image (AI Model mode only)");
                 Console.WriteLine("- Press 'V' to toggle avatar video streaming (Avatar mode only)");
                 Console.WriteLine("- Press 'F' to show avatar streaming information (Avatar mode only)");
                 Console.WriteLine("- Press 'T' to test connection and reconnect if needed");
@@ -159,6 +163,9 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                             break;
                         case ConsoleKey.S:
                             ShowStatus();
+                            break;
+                        case ConsoleKey.I:
+                            await SendImageAsync();
                             break;
                         case ConsoleKey.V:
                             ToggleAvatarVideoStreaming();
@@ -386,6 +393,40 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                     {
                         Type = "azure_deep_noise_suppression"
                     };
+
+                    // Function Calling - サンプルツール定義
+                    if (mode == ConnectionMode.AIModel)
+                    {
+                        options.Tools = new[]
+                        {
+                            new Function
+                            {
+                                Name = "get_weather",
+                                Description =
+                                    "Get the current weather for a given location. The user may ask in any language.",
+                                Parameters = new Params
+                                {
+                                    Properties = new Dictionary<string, Param>
+                                    {
+                                        ["location"] = new Param
+                                        {
+                                            Type = "string",
+                                            Description = "The city and country, e.g. 'Tokyo, Japan'"
+                                        },
+                                        ["unit"] = new Param
+                                        {
+                                            Type = "string",
+                                            Enum = new[] { "celsius", "fahrenheit" },
+                                            Description = "Temperature unit"
+                                        }
+                                    },
+                                    Required = new[] { "location" }
+                                }
+                            }
+                        };
+                        options.ToolChoice = "auto";
+                    }
+
                     break;
 
                 case ConnectionMode.Avatar:
@@ -644,8 +685,16 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
             serverManager.OnResponseContentPartDoneReceived += DebugMessages;
             serverManager.OnResponseCreatedReceived += DebugMessages;
             serverManager.OnResponseDoneReceived += DebugMessages;
-            serverManager.OnResponseFunctionCallArgumentsDeltaReceived += DebugMessages;
-            serverManager.OnResponseFunctionCallArgumentsDoneReceived += DebugMessages;
+            serverManager.OnFunctionCallDeltaReceived += delta =>
+            {
+                Console.WriteLine("[Function Call Delta] call_id={0}, delta={1}", delta.CallId, delta.Delta);
+            };
+            serverManager.OnFunctionCallDoneReceived += async done =>
+            {
+                Console.WriteLine("[Function Call Done] name={0}, call_id={1}, arguments={2}",
+                    done.Name, done.CallId, done.Arguments);
+                await HandleFunctionCallAsync(done);
+            };
             serverManager.OnResponseOutputItemAddedReceived += DebugMessages;
             serverManager.OnResponseOutputItemDoneReceived += response =>
             {
@@ -947,6 +996,176 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                 logger?.LogInformation("Audio initialized for regular mode: {sampleRate}Hz, {channels} channel",
                     SampleRate,
                     Channels);
+            }
+        }
+
+        /// <summary>
+        ///     Handles a function call from the AI model and sends back the result.
+        /// </summary>
+        private static async Task HandleFunctionCallAsync(FunctionCallDone functionCallDone)
+        {
+            if (voiceLiveSession == null)
+            {
+                logger?.LogWarning("Cannot handle function call: session is null");
+                return;
+            }
+
+            string output;
+
+            switch (functionCallDone.Name)
+            {
+                case "get_weather":
+                    output = HandleGetWeather(functionCallDone.Arguments);
+                    break;
+                default:
+                    logger?.LogWarning("Unknown function: {Name}", functionCallDone.Name);
+                    output = JsonSerializer.Serialize(new { error = $"Unknown function: {functionCallDone.Name}" });
+                    break;
+            }
+
+            Console.WriteLine("[Function Call] {0}({1}) => {2}", functionCallDone.Name, functionCallDone.Arguments,
+                output);
+
+            // Send the function call output back to the server
+            await voiceLiveSession.SendFunctionCallOutputAsync(functionCallDone.CallId, output);
+
+            // Trigger a new response to have the model respond with the function result
+            await voiceLiveSession.CreateResponseAsync();
+
+            logger?.LogInformation("Function call output sent and response triggered for call_id={CallId}",
+                functionCallDone.CallId);
+        }
+
+        /// <summary>
+        ///     Sample implementation of the get_weather function.
+        /// </summary>
+        private static string HandleGetWeather(string argumentsJson)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(argumentsJson);
+                var root = doc.RootElement;
+                var location = root.TryGetProperty("location", out var loc) ? loc.GetString() : "Unknown";
+                var unit = root.TryGetProperty("unit", out var u) ? u.GetString() : "celsius";
+
+                // Return mock weather data for verification
+                var weatherData = new
+                {
+                    location,
+                    temperature = unit == "fahrenheit" ? 72 : 22,
+                    unit,
+                    condition = "sunny",
+                    humidity = 45,
+                    description = $"Weather data for {location} (mock data for function calling verification)"
+                };
+
+                return JsonSerializer.Serialize(weatherData);
+            }
+            catch (Exception ex)
+            {
+                logger?.LogError(ex, "Error parsing weather arguments");
+                return JsonSerializer.Serialize(new { error = "Failed to parse arguments", message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        ///     Sends an image to the AI model for analysis.
+        /// </summary>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        private static async Task SendImageAsync()
+        {
+            if (currentMode != ConnectionMode.AIModel)
+            {
+                Console.WriteLine("Image input is only supported in AI Model mode.");
+                return;
+            }
+
+            if (voiceLiveSession == null)
+            {
+                Console.WriteLine("Session is not initialized.");
+                return;
+            }
+
+            // Stop recording temporarily to allow console input
+            bool wasRecording = isRecording;
+            if (wasRecording)
+            {
+                StopRecording();
+            }
+
+            Console.WriteLine("\n=== Image Input ===");
+            Console.WriteLine("Enter image file path or URL (or 'cancel' to abort):");
+            Console.Write("> ");
+            string? input = Console.ReadLine()?.Trim();
+
+            if (string.IsNullOrEmpty(input) || input.Equals("cancel", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("Image input cancelled.");
+                if (wasRecording)
+                {
+                    StartRecording();
+                }
+                return;
+            }
+
+            Console.WriteLine("Enter a text prompt to accompany the image (optional, press Enter to skip):");
+            Console.Write("> ");
+            string? prompt = Console.ReadLine()?.Trim();
+
+            try
+            {
+                string imageUrl;
+
+                // Determine if input is a URL or file path
+                if (input.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                    input.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                    input.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                {
+                    imageUrl = input;
+                    Console.WriteLine("Using URL: {0}", imageUrl.Length > 80 ? imageUrl.Substring(0, 80) + "..." : imageUrl);
+                }
+                else
+                {
+                    // Treat as file path
+                    Console.WriteLine("Loading image from file: {0}", input);
+                    imageUrl = ImageInputExtensions.CreateImageDataUri(input);
+                    Console.WriteLine("Image converted to base64 data URI ({0} chars)", imageUrl.Length);
+                }
+
+                // Send image with or without text prompt
+                if (!string.IsNullOrEmpty(prompt))
+                {
+                    await voiceLiveSession.SendImageWithTextAsync(imageUrl, prompt);
+                    Console.WriteLine("[Image Sent] with text: \"{0}\"", prompt);
+                }
+                else
+                {
+                    await voiceLiveSession.SendImageAsync(imageUrl);
+                    Console.WriteLine("[Image Sent] (no text prompt)");
+                }
+
+                // Trigger a response from the model
+                await voiceLiveSession.CreateResponseAsync();
+                Console.WriteLine("Response requested.");
+            }
+            catch (FileNotFoundException ex)
+            {
+                Console.WriteLine("Error: File not found - {0}", ex.FileName);
+            }
+            catch (NotSupportedException ex)
+            {
+                Console.WriteLine("Error: {0}", ex.Message);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error sending image: {0}", ex.Message);
+                logger?.LogError(ex, "Error sending image");
+            }
+
+            // Resume recording if it was active
+            if (wasRecording)
+            {
+                StartRecording();
             }
         }
 

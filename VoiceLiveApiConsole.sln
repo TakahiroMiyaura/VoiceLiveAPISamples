@@ -15,12 +15,14 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{99999999-8
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VoiceLiveAPI.Core", "src\VoiceLiveAPI.Core\VoiceLiveAPI.Core.csproj", "{DF8D160A-FD7B-4D84-8D6E-B385E2FC5245}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VoiceLiveAPI.Avatars", "src\VoiceLiveAPI.Avatars\VoiceLiveAPI.Avatars.csproj", "{2A477EC8-5CF3-4E45-83E7-8823FFEF98D7}"
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{DDB4EF12-CC4E-5E88-E6FC-71A802F4DE97}"
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VoiceLiveAPI.Avatars", "src\VoiceLiveAPI.Avatars\VoiceLiveAPI.Avatars.csproj", "{A22EBED6-CA49-A4ED-2216-00286F0D1861}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VoiceLiveSDKConsoleApp", "src\VoiceLiveSDKConsoleApp\VoiceLiveSDKConsoleApp.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -36,10 +38,14 @@ Global
 		{DF8D160A-FD7B-4D84-8D6E-B385E2FC5245}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DF8D160A-FD7B-4D84-8D6E-B385E2FC5245}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DF8D160A-FD7B-4D84-8D6E-B385E2FC5245}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A22EBED6-CA49-A4ED-2216-00286F0D1861}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A22EBED6-CA49-A4ED-2216-00286F0D1861}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A22EBED6-CA49-A4ED-2216-00286F0D1861}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A22EBED6-CA49-A4ED-2216-00286F0D1861}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2A477EC8-5CF3-4E45-83E7-8823FFEF98D7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2A477EC8-5CF3-4E45-83E7-8823FFEF98D7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2A477EC8-5CF3-4E45-83E7-8823FFEF98D7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2A477EC8-5CF3-4E45-83E7-8823FFEF98D7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -47,7 +53,8 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{12345678-1234-1234-1234-123456789012} = {AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}
 		{DF8D160A-FD7B-4D84-8D6E-B385E2FC5245} = {AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}
-		{A22EBED6-CA49-A4ED-2216-00286F0D1861} = {AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}
+		{2A477EC8-5CF3-4E45-83E7-8823FFEF98D7} = {AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890} = {AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {B152D8AD-4BE5-461A-9E2E-3D35DCC63CFD}

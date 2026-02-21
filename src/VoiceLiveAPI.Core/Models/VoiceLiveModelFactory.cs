@@ -313,6 +313,91 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Models
 
         #endregion
 
+        #region FunctionCallDelta Factory Methods
+
+        /// <summary>
+        ///     Creates a new <see cref="FunctionCallDelta" /> instance.
+        /// </summary>
+        /// <param name="eventId">The event identifier.</param>
+        /// <param name="responseId">The response identifier.</param>
+        /// <param name="itemId">The item identifier.</param>
+        /// <param name="outputIndex">The output index.</param>
+        /// <param name="callId">The call identifier.</param>
+        /// <param name="delta">The function arguments delta.</param>
+        /// <returns>A new <see cref="FunctionCallDelta" /> instance.</returns>
+        public static FunctionCallDelta FunctionCallDelta(
+            string eventId = null,
+            string responseId = null,
+            string itemId = null,
+            int outputIndex = 0,
+            string callId = null,
+            string delta = null)
+        {
+            return new FunctionCallDelta(eventId, responseId, itemId, outputIndex, callId, delta);
+        }
+
+        /// <summary>
+        ///     Creates a <see cref="FunctionCallDelta" /> from a JSON element.
+        /// </summary>
+        /// <param name="element">The JSON element containing the function call delta data.</param>
+        /// <returns>A new <see cref="FunctionCallDelta" /> instance.</returns>
+        public static FunctionCallDelta FunctionCallDeltaFromJson(JsonElement element)
+        {
+            return new FunctionCallDelta(
+                GetStringProperty(element, "event_id"),
+                GetStringProperty(element, "response_id"),
+                GetStringProperty(element, "item_id"),
+                GetIntProperty(element, "output_index"),
+                GetStringProperty(element, "call_id"),
+                GetStringProperty(element, "delta"));
+        }
+
+        #endregion
+
+        #region FunctionCallDone Factory Methods
+
+        /// <summary>
+        ///     Creates a new <see cref="FunctionCallDone" /> instance.
+        /// </summary>
+        /// <param name="eventId">The event identifier.</param>
+        /// <param name="responseId">The response identifier.</param>
+        /// <param name="itemId">The item identifier.</param>
+        /// <param name="outputIndex">The output index.</param>
+        /// <param name="callId">The call identifier.</param>
+        /// <param name="name">The function name.</param>
+        /// <param name="arguments">The complete function arguments JSON string.</param>
+        /// <returns>A new <see cref="FunctionCallDone" /> instance.</returns>
+        public static FunctionCallDone FunctionCallDone(
+            string eventId = null,
+            string responseId = null,
+            string itemId = null,
+            int outputIndex = 0,
+            string callId = null,
+            string name = null,
+            string arguments = null)
+        {
+            return new FunctionCallDone(eventId, responseId, itemId, outputIndex, callId, name, arguments);
+        }
+
+        /// <summary>
+        ///     Creates a <see cref="FunctionCallDone" /> from a JSON element.
+        /// </summary>
+        /// <param name="element">The JSON element containing the function call done data.</param>
+        /// <returns>A new <see cref="FunctionCallDone" /> instance.</returns>
+        public static FunctionCallDone FunctionCallDoneFromJson(JsonElement element)
+        {
+            return new FunctionCallDone(
+                GetStringProperty(element, "event_id"),
+                GetStringProperty(element, "response_id"),
+                GetStringProperty(element, "item_id"),
+                GetIntProperty(element, "output_index"),
+                GetStringProperty(element, "call_id"),
+                GetStringProperty(element, "name"),
+                GetStringProperty(element, "arguments"));
+        }
+
+        #endregion
+
         #region Helper Methods
 
         private static string GetStringProperty(JsonElement element, string propertyName)

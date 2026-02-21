@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts
 {
     /// <summary>
-    ///     Represents a set of parameters with their types, descriptions, and required fields.
+    ///     Represents a JSON Schema for function parameters.
     /// </summary>
     public class Params
     {
@@ -19,16 +19,22 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts
         public string Type { get; set; } = "object";
 
         /// <summary>
-        ///     Gets or sets the dictionary of parameters, where the key is the parameter name and the value is the parameter
-        ///     details.
+        ///     Gets or sets the dictionary of properties, where the key is the property name and the value is the property
+        ///     schema.
         /// </summary>
-        [JsonPropertyName("parameters")]
-        public Dictionary<string, Param> Parameters { get; set; } = null;
+        [JsonPropertyName("properties")]
+        public Dictionary<string, Param> Properties { get; set; } = null;
 
         /// <summary>
-        ///     Gets or sets the list of required parameter names.
+        ///     Gets or sets the list of required property names.
         /// </summary>
         [JsonPropertyName("required")]
         public string[] Required { get; set; } = null;
+
+        /// <summary>
+        ///     Gets or sets whether additional properties are allowed. Default is null (not specified).
+        /// </summary>
+        [JsonPropertyName("additionalProperties")]
+        public bool? AdditionalProperties { get; set; } = null;
     }
 }

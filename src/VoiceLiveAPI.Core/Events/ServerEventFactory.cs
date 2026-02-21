@@ -164,6 +164,10 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Events
             Register("conversation.item.input_audio_transcription.completed",
                 VoiceLiveModelFactory.TranscriptionResultFromJson);
 
+            // Function call events
+            Register("response.function_call_arguments.delta", VoiceLiveModelFactory.FunctionCallDeltaFromJson);
+            Register("response.function_call_arguments.done", VoiceLiveModelFactory.FunctionCallDoneFromJson);
+
             // TODO: Add factory methods for remaining event types
             // - response.audio.done
             // - response.audio_transcript.done
@@ -182,8 +186,6 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Events
             // - conversation.item.truncated
             // - response.text.delta
             // - response.text.done
-            // - response.function_call_arguments.delta
-            // - response.function_call_arguments.done
             // - session.avatar.connecting
             // - response.animation.viseme.delta
             // - response.animation.viseme.done

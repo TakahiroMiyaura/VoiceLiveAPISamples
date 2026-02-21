@@ -84,6 +84,17 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
         }
 
         /// <summary>
+        ///     Creates a Base64-encoded SDP offer string for use with external session APIs (e.g., Azure.AI.VoiceLive SDK).
+        /// </summary>
+        /// <param name="server">ICE server information.</param>
+        /// <returns>A Base64-encoded SDP offer string suitable for ConnectAvatarAsync.</returns>
+        public async Task<string> CreateSdpOfferStringAsync(IceServers server)
+        {
+            var sdpData = await CreateSdpOfferAsync(server);
+            return sdpData.ClientSdp;
+        }
+
+        /// <summary>
         ///     Creates the SDP offer for avatar connection.
         /// </summary>
         /// <param name="server">ICE server information.</param>

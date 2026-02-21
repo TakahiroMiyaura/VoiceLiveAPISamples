@@ -15,10 +15,19 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Models
     /// </remarks>
     public class FunctionCallDelta : ServerEvent
     {
+        #region Static Fields and Constants
+
+        /// <summary>
+        ///     The type name for this event.
+        /// </summary>
+        public const string TypeName = "response.function_call_arguments.delta";
+
+        #endregion
+
         #region Properties
 
         /// <inheritdoc />
-        public override string Type => "response.function_call_arguments.delta";
+        public override string Type => TypeName;
 
         /// <summary>
         ///     Gets or sets the response identifier.
