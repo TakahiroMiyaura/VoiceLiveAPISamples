@@ -20,7 +20,12 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         /// <summary>
         ///     The default API version used when not specified.
         /// </summary>
-        public const string DefaultApiVersion = "2025-05-01-preview";
+        public const string DefaultApiVersion = "2025-10-01";
+
+        /// <summary>
+        ///     The preview API version that includes Foundry Agent integration and filler response features.
+        /// </summary>
+        public const string PreviewApiVersion = "2026-01-01-preview";
 
         #endregion
 

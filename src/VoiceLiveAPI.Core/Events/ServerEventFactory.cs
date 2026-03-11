@@ -142,31 +142,41 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Events
         /// </summary>
         private static void RegisterDefaultFactories()
         {
-            // Audio events (factory methods available)
-            Register("response.audio.delta", VoiceLiveModelFactory.AudioDeltaFromJson);
-            Register("response.audio_transcript.delta", VoiceLiveModelFactory.TranscriptDeltaFromJson);
+            // Audio events
+            Register(AudioDelta.TypeName, VoiceLiveModelFactory.AudioDeltaFromJson);
+            Register(TranscriptDelta.TypeName, VoiceLiveModelFactory.TranscriptDeltaFromJson);
 
-            // Speech events (factory methods available)
-            Register("input_audio_buffer.speech_started", VoiceLiveModelFactory.SpeechStartedFromJson);
-            Register("input_audio_buffer.speech_stopped", VoiceLiveModelFactory.SpeechStoppedFromJson);
+            // Speech events
+            Register(SpeechStarted.TypeName, VoiceLiveModelFactory.SpeechStartedFromJson);
+            Register(SpeechStopped.TypeName, VoiceLiveModelFactory.SpeechStoppedFromJson);
 
-            // Session events (factory methods available)
-            Register("session.created", VoiceLiveModelFactory.SessionInfoFromJson);
-            Register("session.updated", VoiceLiveModelFactory.SessionInfoFromJson);
+            // Session events
+            Register(SessionInfo.TypeNameCreated, VoiceLiveModelFactory.SessionInfoFromJson);
+            Register(SessionInfo.TypeNameUpdated, VoiceLiveModelFactory.SessionInfoFromJson);
 
-            // Response events (factory methods available)
-            Register("response.done", VoiceLiveModelFactory.ResponseInfoFromJson);
+            // Response events
+            Register(ResponseInfo.TypeName, VoiceLiveModelFactory.ResponseInfoFromJson);
 
-            // Error event (factory methods available)
-            Register("error", VoiceLiveModelFactory.VoiceLiveErrorFromJson);
+            // Error event
+            Register(VoiceLiveError.TypeName, VoiceLiveModelFactory.VoiceLiveErrorFromJson);
 
-            // Transcription events (factory methods available)
-            Register("conversation.item.input_audio_transcription.completed",
-                VoiceLiveModelFactory.TranscriptionResultFromJson);
+            // Transcription events
+            Register(TranscriptionResult.TypeName, VoiceLiveModelFactory.TranscriptionResultFromJson);
 
             // Function call events
-            Register("response.function_call_arguments.delta", VoiceLiveModelFactory.FunctionCallDeltaFromJson);
-            Register("response.function_call_arguments.done", VoiceLiveModelFactory.FunctionCallDoneFromJson);
+            Register(FunctionCallDelta.TypeName, VoiceLiveModelFactory.FunctionCallDeltaFromJson);
+            Register(FunctionCallDone.TypeName, VoiceLiveModelFactory.FunctionCallDoneFromJson);
+
+            // Foundry Agent call events (2026-01-01-preview)
+            Register(FoundryAgentCallArgumentsDelta.TypeName,
+                VoiceLiveModelFactory.FoundryAgentCallArgumentsDeltaFromJson);
+            Register(FoundryAgentCallArgumentsDone.TypeName,
+                VoiceLiveModelFactory.FoundryAgentCallArgumentsDoneFromJson);
+            Register(FoundryAgentCallInProgress.TypeName,
+                VoiceLiveModelFactory.FoundryAgentCallInProgressFromJson);
+            Register(FoundryAgentCallCompleted.TypeName,
+                VoiceLiveModelFactory.FoundryAgentCallCompletedFromJson);
+            Register(FoundryAgentCallFailed.TypeName, VoiceLiveModelFactory.FoundryAgentCallFailedFromJson);
 
             // TODO: Add factory methods for remaining event types
             // - response.audio.done

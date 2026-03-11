@@ -23,6 +23,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts.Unverifie
         ///     - message
         ///     - function_call
         ///     - function_call_output
+        ///     - foundry_agent_call (2026-01-01-preview)
         /// </summary>
         [JsonPropertyName("type")]
         public string Type { get; set; } = string.Empty;
@@ -80,5 +81,12 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts.Unverifie
         /// </summary>
         [JsonPropertyName("output")]
         public string Output { get; set; } = null;
+
+        /// <summary>
+        ///     The agent response identifier for Foundry Agent call items.
+        ///     Available in API version 2026-01-01-preview and later.
+        /// </summary>
+        [JsonPropertyName("agent_response_id")]
+        public string AgentResponseId { get; set; } = null;
     }
 }

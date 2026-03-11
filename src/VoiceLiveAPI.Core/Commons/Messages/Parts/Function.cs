@@ -9,13 +9,24 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts
     /// <summary>
     ///     Represents a function tool definition for the Realtime API.
     /// </summary>
-    public class Function
+    public class Function : RealtimeTool
     {
+        #region Static Fields and Constants
+
+        /// <summary>
+        ///     The type discriminator value for function tools.
+        /// </summary>
+        public const string TypeDiscriminator = "function";
+
+        #endregion
+
+        #region Properties
+
         /// <summary>
         ///     Gets or sets the type of the tool. Always "function" for function tools.
         /// </summary>
         [JsonPropertyName("type")]
-        public string Type { get; set; } = "function";
+        public override string Type { get; set; } = TypeDiscriminator;
 
         /// <summary>
         ///     Gets or sets the name of the function to use.
@@ -34,5 +45,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts
         /// </summary>
         [JsonPropertyName("parameters")]
         public Params Parameters { get; set; } = null;
+
+        #endregion
     }
 }

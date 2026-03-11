@@ -57,7 +57,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts
         ///     Gets or sets the tools available for the client session.
         /// </summary>
         [JsonPropertyName("tools")]
-        public Function[] Tools { get; set; } = null;
+        public RealtimeTool[] Tools { get; set; } = null;
 
         /// <summary>
         ///     Gets or sets the tool choice for the client session.
@@ -106,5 +106,12 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts
         /// </summary>
         [JsonPropertyName("input_audio_sampling_rate")]
         public int? InputAudioSamplingRate { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the filler response configuration.
+        ///     Available in API version 2026-01-01-preview and later.
+        /// </summary>
+        [JsonPropertyName("filler_response")]
+        public FillerResponseConfig FillerResponse { get; set; } = null;
     }
 }

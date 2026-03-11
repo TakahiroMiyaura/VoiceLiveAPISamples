@@ -1005,6 +1005,166 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         }
 
         /// <summary>
+        ///     Event fired when a Foundry Agent call arguments delta is received.
+        /// </summary>
+        public event Action<FoundryAgentCallArgumentsDelta> OnFoundryAgentCallArgumentsDeltaReceived
+        {
+            add
+            {
+                if (TryGetValue(ResponseFoundryAgentCallArgumentsDeltaHandler.EventType, out var handler))
+                {
+                    ((ResponseFoundryAgentCallArgumentsDeltaHandler)handler).OnProcessMessage += value;
+                }
+                else
+                {
+                    var h = new ResponseFoundryAgentCallArgumentsDeltaHandler();
+                    h.OnProcessMessage += value;
+                    RegisterMessageHandler(h);
+                }
+            }
+            remove
+            {
+                if (TryGetValue(ResponseFoundryAgentCallArgumentsDeltaHandler.EventType, out var handler))
+                {
+                    ((ResponseFoundryAgentCallArgumentsDeltaHandler)handler).OnProcessMessage -= value;
+                }
+                else
+                {
+                    throw new InvalidOperationException(
+                        "Handler not registered for ResponseFoundryAgentCallArgumentsDeltaHandler.");
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Event fired when Foundry Agent call arguments streaming is completed.
+        /// </summary>
+        public event Action<FoundryAgentCallArgumentsDone> OnFoundryAgentCallArgumentsDoneReceived
+        {
+            add
+            {
+                if (TryGetValue(ResponseFoundryAgentCallArgumentsDoneHandler.EventType, out var handler))
+                {
+                    ((ResponseFoundryAgentCallArgumentsDoneHandler)handler).OnProcessMessage += value;
+                }
+                else
+                {
+                    var h = new ResponseFoundryAgentCallArgumentsDoneHandler();
+                    h.OnProcessMessage += value;
+                    RegisterMessageHandler(h);
+                }
+            }
+            remove
+            {
+                if (TryGetValue(ResponseFoundryAgentCallArgumentsDoneHandler.EventType, out var handler))
+                {
+                    ((ResponseFoundryAgentCallArgumentsDoneHandler)handler).OnProcessMessage -= value;
+                }
+                else
+                {
+                    throw new InvalidOperationException(
+                        "Handler not registered for ResponseFoundryAgentCallArgumentsDoneHandler.");
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Event fired when a Foundry Agent call is in progress.
+        /// </summary>
+        public event Action<FoundryAgentCallInProgress> OnFoundryAgentCallInProgressReceived
+        {
+            add
+            {
+                if (TryGetValue(ResponseFoundryAgentCallInProgressHandler.EventType, out var handler))
+                {
+                    ((ResponseFoundryAgentCallInProgressHandler)handler).OnProcessMessage += value;
+                }
+                else
+                {
+                    var h = new ResponseFoundryAgentCallInProgressHandler();
+                    h.OnProcessMessage += value;
+                    RegisterMessageHandler(h);
+                }
+            }
+            remove
+            {
+                if (TryGetValue(ResponseFoundryAgentCallInProgressHandler.EventType, out var handler))
+                {
+                    ((ResponseFoundryAgentCallInProgressHandler)handler).OnProcessMessage -= value;
+                }
+                else
+                {
+                    throw new InvalidOperationException(
+                        "Handler not registered for ResponseFoundryAgentCallInProgressHandler.");
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Event fired when a Foundry Agent call has completed.
+        /// </summary>
+        public event Action<FoundryAgentCallCompleted> OnFoundryAgentCallCompletedReceived
+        {
+            add
+            {
+                if (TryGetValue(ResponseFoundryAgentCallCompletedHandler.EventType, out var handler))
+                {
+                    ((ResponseFoundryAgentCallCompletedHandler)handler).OnProcessMessage += value;
+                }
+                else
+                {
+                    var h = new ResponseFoundryAgentCallCompletedHandler();
+                    h.OnProcessMessage += value;
+                    RegisterMessageHandler(h);
+                }
+            }
+            remove
+            {
+                if (TryGetValue(ResponseFoundryAgentCallCompletedHandler.EventType, out var handler))
+                {
+                    ((ResponseFoundryAgentCallCompletedHandler)handler).OnProcessMessage -= value;
+                }
+                else
+                {
+                    throw new InvalidOperationException(
+                        "Handler not registered for ResponseFoundryAgentCallCompletedHandler.");
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Event fired when a Foundry Agent call has failed.
+        /// </summary>
+        public event Action<FoundryAgentCallFailed> OnFoundryAgentCallFailedReceived
+        {
+            add
+            {
+                if (TryGetValue(ResponseFoundryAgentCallFailedHandler.EventType, out var handler))
+                {
+                    ((ResponseFoundryAgentCallFailedHandler)handler).OnProcessMessage += value;
+                }
+                else
+                {
+                    var h = new ResponseFoundryAgentCallFailedHandler();
+                    h.OnProcessMessage += value;
+                    RegisterMessageHandler(h);
+                }
+            }
+            remove
+            {
+                if (TryGetValue(ResponseFoundryAgentCallFailedHandler.EventType, out var handler))
+                {
+                    ((ResponseFoundryAgentCallFailedHandler)handler).OnProcessMessage -= value;
+                }
+                else
+                {
+                    throw new InvalidOperationException(
+                        "Handler not registered for ResponseFoundryAgentCallFailedHandler.");
+                }
+            }
+        }
+
+        /// <summary>
         ///     Event fired when a response text delta message is processed.
         /// </summary>
         public event Action<ResponseTextDeltaMessage> OnResponseTextDeltaReceived

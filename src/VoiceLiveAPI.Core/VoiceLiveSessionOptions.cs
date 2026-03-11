@@ -28,7 +28,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         /// <summary>
         ///     The default AI model to use.
         /// </summary>
-        public const string DefaultModel = "gpt-4o";
+        public const string DefaultModel = "gpt-5-mini";
 
         /// <summary>
         ///     The default input audio format.
@@ -157,13 +157,15 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         public int? InputAudioSamplingRate { get; set; }
 
         /// <summary>
-        ///     Gets or sets the tools (functions) available for the AI model to call.
+        ///     Gets or sets the tools available for the AI model to call.
         /// </summary>
         /// <value>
-        ///     An array of <see cref="Function" /> objects defining available tools.
+        ///     An array of <see cref="RealtimeTool" /> objects defining available tools.
+        ///     Supports <see cref="Function" /> (type: "function") and <see cref="FoundryAgentTool" /> (type:
+        ///     "foundry_agent").
         /// </value>
         [JsonPropertyName("tools")]
-        public Function[] Tools { get; set; }
+        public RealtimeTool[] Tools { get; set; }
 
         /// <summary>
         ///     Gets or sets the tool choice preference.
@@ -218,6 +220,18 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         /// </value>
         [JsonPropertyName("output_audio_timestamp_types")]
         public string[] OutputAudioTimestampTypes { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the filler response configuration.
+        /// </summary>
+        /// <value>
+        ///     A <see cref="FillerResponseConfig" /> object for filler response configuration.
+        ///     Supports <see cref="BasicFillerResponseConfig" /> (type: "static_filler") and
+        ///     <see cref="LlmFillerResponseConfig" /> (type: "llm_filler").
+        ///     Available in API version 2026-01-01-preview and later.
+        /// </value>
+        [JsonPropertyName("filler_response")]
+        public FillerResponseConfig FillerResponse { get; set; }
 
         #endregion
 

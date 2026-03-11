@@ -55,6 +55,11 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Models
                 info.Avatar = avatar.Deserialize<Avatar>();
             }
 
+            if (sessionElement.TryGetProperty("filler_response", out var fillerResponse))
+            {
+                info.FillerResponse = fillerResponse.Deserialize<FillerResponseConfig>();
+            }
+
             return info;
         }
 
@@ -394,6 +399,97 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Models
                 GetStringProperty(element, "call_id"),
                 GetStringProperty(element, "name"),
                 GetStringProperty(element, "arguments"));
+        }
+
+        #endregion
+
+        #region FoundryAgentCallArgumentsDelta Factory Methods
+
+        /// <summary>
+        ///     Creates a <see cref="FoundryAgentCallArgumentsDelta" /> from a JSON element.
+        /// </summary>
+        /// <param name="element">The JSON element containing the event data.</param>
+        /// <returns>A new <see cref="FoundryAgentCallArgumentsDelta" /> instance.</returns>
+        public static FoundryAgentCallArgumentsDelta FoundryAgentCallArgumentsDeltaFromJson(JsonElement element)
+        {
+            return new FoundryAgentCallArgumentsDelta(
+                GetStringProperty(element, "event_id"),
+                GetStringProperty(element, "response_id"),
+                GetStringProperty(element, "item_id"),
+                GetIntProperty(element, "output_index"),
+                GetStringProperty(element, "delta"));
+        }
+
+        #endregion
+
+        #region FoundryAgentCallArgumentsDone Factory Methods
+
+        /// <summary>
+        ///     Creates a <see cref="FoundryAgentCallArgumentsDone" /> from a JSON element.
+        /// </summary>
+        /// <param name="element">The JSON element containing the event data.</param>
+        /// <returns>A new <see cref="FoundryAgentCallArgumentsDone" /> instance.</returns>
+        public static FoundryAgentCallArgumentsDone FoundryAgentCallArgumentsDoneFromJson(JsonElement element)
+        {
+            return new FoundryAgentCallArgumentsDone(
+                GetStringProperty(element, "event_id"),
+                GetStringProperty(element, "response_id"),
+                GetStringProperty(element, "item_id"),
+                GetIntProperty(element, "output_index"),
+                GetStringProperty(element, "arguments"));
+        }
+
+        #endregion
+
+        #region FoundryAgentCallInProgress Factory Methods
+
+        /// <summary>
+        ///     Creates a <see cref="FoundryAgentCallInProgress" /> from a JSON element.
+        /// </summary>
+        /// <param name="element">The JSON element containing the event data.</param>
+        /// <returns>A new <see cref="FoundryAgentCallInProgress" /> instance.</returns>
+        public static FoundryAgentCallInProgress FoundryAgentCallInProgressFromJson(JsonElement element)
+        {
+            return new FoundryAgentCallInProgress(
+                GetStringProperty(element, "event_id"),
+                GetStringProperty(element, "item_id"),
+                GetStringProperty(element, "agent_response_id"),
+                GetIntProperty(element, "output_index"));
+        }
+
+        #endregion
+
+        #region FoundryAgentCallCompleted Factory Methods
+
+        /// <summary>
+        ///     Creates a <see cref="FoundryAgentCallCompleted" /> from a JSON element.
+        /// </summary>
+        /// <param name="element">The JSON element containing the event data.</param>
+        /// <returns>A new <see cref="FoundryAgentCallCompleted" /> instance.</returns>
+        public static FoundryAgentCallCompleted FoundryAgentCallCompletedFromJson(JsonElement element)
+        {
+            return new FoundryAgentCallCompleted(
+                GetStringProperty(element, "event_id"),
+                GetStringProperty(element, "item_id"),
+                GetStringProperty(element, "agent_response_id"),
+                GetIntProperty(element, "output_index"));
+        }
+
+        #endregion
+
+        #region FoundryAgentCallFailed Factory Methods
+
+        /// <summary>
+        ///     Creates a <see cref="FoundryAgentCallFailed" /> from a JSON element.
+        /// </summary>
+        /// <param name="element">The JSON element containing the event data.</param>
+        /// <returns>A new <see cref="FoundryAgentCallFailed" /> instance.</returns>
+        public static FoundryAgentCallFailed FoundryAgentCallFailedFromJson(JsonElement element)
+        {
+            return new FoundryAgentCallFailed(
+                GetStringProperty(element, "event_id"),
+                GetStringProperty(element, "item_id"),
+                GetIntProperty(element, "output_index"));
         }
 
         #endregion

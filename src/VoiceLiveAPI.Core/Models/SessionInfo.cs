@@ -104,6 +104,15 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Models
         [JsonPropertyName("avatar")]
         public Avatar Avatar { get; set; }
 
+        /// <summary>
+        ///     Gets or sets the filler response configuration for this session.
+        /// </summary>
+        /// <remarks>
+        ///     Available in API version 2026-01-01-preview and later.
+        /// </remarks>
+        [JsonPropertyName("filler_response")]
+        public FillerResponseConfig FillerResponse { get; set; }
+
         #endregion
 
         #region Constructors

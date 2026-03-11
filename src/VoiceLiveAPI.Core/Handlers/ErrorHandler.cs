@@ -43,9 +43,8 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Handlers
         /// <returns>A task that represents the asynchronous operation.</returns>
         public override async Task HandleAsync(JsonElement message)
         {
-            var json = message.Deserialize<VoiceLiveError>() ??
-                       throw new InvalidOperationException("Deserialization failed for VoiceLiveError.");
-            OnProcessMessage?.Invoke(json);
+            var error = VoiceLiveModelFactory.VoiceLiveErrorFromJson(message);
+            OnProcessMessage?.Invoke(error);
             await Task.CompletedTask;
         }
     }

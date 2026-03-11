@@ -35,6 +35,12 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
         AIModel,
 
         /// <summary>
+        ///     AI Model with Foundry Agent Tool (Preview API 2026-01-01-preview).
+        ///     Chat supervisor pattern: AI Model calls Foundry Agent as a tool.
+        /// </summary>
+        AIModelWithFoundryAgent,
+
+        /// <summary>
         ///     Connection to custom AI agents.
         /// </summary>
         AIAgent,
@@ -100,6 +106,12 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                 // Choose connection mode
                 currentMode = ChooseConnectionMode();
 
+                // Prompt for Foundry Agent tool configuration (AI Model + Foundry Agent mode)
+                if (currentMode == ConnectionMode.AIModelWithFoundryAgent)
+                {
+                    PromptFoundryAgentToolConfig();
+                }
+
                 // Initialize client based on mode
                 await InitializeClientAsync();
 
@@ -112,7 +124,10 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                 // Start session with VoiceLiveClient
                 VoiceLiveSessionOptions sessionOptions = CreateSessionOptions(currentMode);
 
-                if (currentMode == ConnectionMode.AIModel)
+                // Diagnostic: Print the session.update JSON that will be sent
+                PrintSessionDiagnostics(sessionOptions);
+
+                if (currentMode == ConnectionMode.AIModel || currentMode == ConnectionMode.AIModelWithFoundryAgent)
                 {
                     voiceLiveSession = await voiceLiveClient!.StartSessionAsync(sessionOptions);
                 }
@@ -126,8 +141,9 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                 // Add message handlers to session
                 SetupSessionEventHandlers();
 
-                // Start audio input
-                StartRecording();
+                // Note: Recording is started by OnSessionUpdateReceived handler
+                // after the server confirms the session is ready (session.updated event).
+                // Starting here would cause a race condition with NAudio's internal state.
 
                 Console.WriteLine("\nReady for conversation!");
                 Console.WriteLine("Commands:");
@@ -317,6 +333,23 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
         private static ConnectionMode currentMode;
 
         /// <summary>
+        ///     Foundry Agent name for tool calling (2026-01-01-preview).
+        ///     When set, a FoundryAgentTool is added to session tools.
+        /// </summary>
+        private static string foundryAgentName = "";
+
+        /// <summary>
+        ///     Foundry Agent version for tool calling (2026-01-01-preview).
+        /// </summary>
+        private static string foundryAgentVersion = "";
+
+        /// <summary>
+        ///     Foundry Agent description for tool calling (2026-01-01-preview).
+        ///     Required by the server for Foundry Agent tools.
+        /// </summary>
+        private static string foundryAgentDescription = "";
+
+        /// <summary>
         ///     Indicates whether API Key authentication is used (false = EntraID/TokenCredential).
         /// </summary>
         private static bool useApiKeyAuth;
@@ -359,6 +392,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
             switch (mode)
             {
                 case ConnectionMode.AIModel:
+                case ConnectionMode.AIModelWithFoundryAgent:
                 case ConnectionMode.AIAgent:
                     // Standard audio settings - match ClientSessionUpdate.Default
                     options.Avatar = null;
@@ -373,13 +407,6 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                         Name = "ja-JP-Nanami:DragonHDLatestNeural",
                         Type = "azure-standard"
                     };
-                    // Output audio timestamp types for word-level timing
-                    options.OutputAudioTimestampTypes = new[] { "word" };
-                    // Animation settings for viseme output
-                    options.Animation = new Animation
-                    {
-                        Outputs = new[] { "viseme_id" }
-                    };
                     // Configure VAD with explicit settings to ensure response generation
                     options.TurnDetection = new TurnDetection
                     {
@@ -393,11 +420,65 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                     {
                         Type = "azure_deep_noise_suppression"
                     };
-
-                    // Function Calling - サンプルツール定義
-                    if (mode == ConnectionMode.AIModel)
+                    // Input audio echo cancellation - prevents AI response audio from being
+                    // picked up by the microphone and interrupting the response
+                    options.InputAudioEchoCancellation = new AudioInputEchoCancellationSettings();
+                    // Filler response - speaks filler phrases during latency or tool call wait times
+                    options.FillerResponse = new BasicFillerResponseConfig
                     {
-                        options.Tools = new[]
+                        Texts = new[]
+                        {
+                            "少々お待ちください。",
+                            "確認しますね。",
+                            "ちょっと調べますね。",
+                            "はい、少しお待ちくださいね。"
+                        },
+                        Triggers = new[] { "latency", "tool" },
+                        LatencyThresholdMs = 2000
+                    };
+
+                    // Tool definitions and mode-specific settings
+                    if (mode == ConnectionMode.AIModelWithFoundryAgent)
+                    {
+                        // Foundry Agent Tool - Preview API (2026-01-01-preview)
+                        // Chat supervisor pattern: AI Model (gpt-4o) calls Foundry Agent as a tool.
+                        // Output audio timestamp types for word-level timing
+                        options.OutputAudioTimestampTypes = new[] { "word" };
+                        // Animation settings for viseme output
+                        options.Animation = new Animation
+                        {
+                            Outputs = new[] { "viseme_id" }
+                        };
+
+                        var foundryTool = new FoundryAgentTool
+                        {
+                            AgentName = foundryAgentName,
+                            ProjectName = agentProjectName,
+                            Description = foundryAgentDescription
+                        };
+                        if (!string.IsNullOrEmpty(foundryAgentVersion))
+                        {
+                            foundryTool.AgentVersion = foundryAgentVersion;
+                        }
+
+                        options.Tools = new RealtimeTool[] { foundryTool };
+                        options.ToolChoice = "auto";
+                        Console.WriteLine(
+                            $"Foundry Agent Tool configured: agent_name={foundryAgentName}, project_name={agentProjectName}");
+                    }
+                    else if (mode == ConnectionMode.AIModel)
+                    {
+                        // Standard AI Model mode
+                        // Output audio timestamp types for word-level timing
+                        options.OutputAudioTimestampTypes = new[] { "word" };
+                        // Animation settings for viseme output
+                        options.Animation = new Animation
+                        {
+                            Outputs = new[] { "viseme_id" }
+                        };
+
+                        // Function Calling - サンプルツール定義
+                        options.Tools = new RealtimeTool[]
                         {
                             new Function
                             {
@@ -425,6 +506,17 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                             }
                         };
                         options.ToolChoice = "auto";
+                    }
+                    else
+                    {
+                        // AI Agent mode - no custom tools (agent manages its own tools)
+                        // Output audio timestamp types for word-level timing
+                        options.OutputAudioTimestampTypes = new[] { "word" };
+                        // Animation settings for viseme output
+                        options.Animation = new Animation
+                        {
+                            Outputs = new[] { "viseme_id" }
+                        };
                     }
 
                     break;
@@ -461,6 +553,8 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                     {
                         Type = "azure_deep_noise_suppression"
                     };
+                    // Input audio echo cancellation
+                    options.InputAudioEchoCancellation = new AudioInputEchoCancellationSettings();
                     // Avatar video settings
                     options.Avatar = new Avatar
                     {
@@ -551,18 +645,33 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
 
                 if (pcmData.Length > 0)
                 {
-                    // Add audio data directly to the wave provider for playback
-                    lock (waveProvider)
+                    // Guard against audio processing during shutdown
+                    var provider = waveProvider;
+                    var player = waveOut;
+                    if (provider == null || player == null)
                     {
-                        waveProvider.AddSamples(pcmData, 0, pcmData.Length);
+                        return;
+                    }
+
+                    // Add audio data directly to the wave provider for playback
+                    lock (provider)
+                    {
+                        provider.AddSamples(pcmData, 0, pcmData.Length);
                     }
 
                     // Check actual playback state, not just the isPlaying flag
                     // NAudio may have stopped due to empty buffer even if isPlaying is true
-                    if (waveOut.PlaybackState != PlaybackState.Playing)
+                    try
                     {
-                        waveOut.Play();
-                        isPlaying = true;
+                        if (player.PlaybackState != PlaybackState.Playing)
+                        {
+                            player.Play();
+                            isPlaying = true;
+                        }
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // waveOut may have been disposed between the null check and Play() call
                     }
                 }
             };
@@ -631,8 +740,9 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
 
             serverManager.OnErrorReceived += response =>
             {
-                logger?.LogError("Error received: {Type} - {Response}", response.Type,
-                    JsonSerializer.Serialize(response));
+                logger?.LogError(
+                    "Error received: code={Code}, message={Message}, error_type={ErrorType}, param={Param}",
+                    response.Code, response.Message, response.ErrorType, response.Param);
             };
 
             serverManager.OnResponseTextDoneReceived += response =>
@@ -695,6 +805,30 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                     done.Name, done.CallId, done.Arguments);
                 await HandleFunctionCallAsync(done);
             };
+
+            // Foundry Agent call event handlers (2026-01-01-preview)
+            serverManager.OnFoundryAgentCallArgumentsDeltaReceived += DebugMessages;
+            serverManager.OnFoundryAgentCallArgumentsDoneReceived += done =>
+            {
+                Console.WriteLine("[Foundry Agent Call Arguments Done] item_id={0}, arguments={1}",
+                    done.ItemId, done.Arguments);
+            };
+            serverManager.OnFoundryAgentCallInProgressReceived += inProgress =>
+            {
+                Console.WriteLine("[Foundry Agent Call In Progress] item_id={0}, agent_response_id={1}",
+                    inProgress.ItemId, inProgress.AgentResponseId);
+            };
+            serverManager.OnFoundryAgentCallCompletedReceived += completed =>
+            {
+                Console.WriteLine("[Foundry Agent Call Completed] item_id={0}, agent_response_id={1}",
+                    completed.ItemId, completed.AgentResponseId);
+            };
+            serverManager.OnFoundryAgentCallFailedReceived += failed =>
+            {
+                Console.WriteLine("[Foundry Agent Call Failed] item_id={0}, output_index={1}",
+                    failed.ItemId, failed.OutputIndex);
+            };
+
             serverManager.OnResponseOutputItemAddedReceived += DebugMessages;
             serverManager.OnResponseOutputItemDoneReceived += response =>
             {
@@ -737,9 +871,10 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
         {
             Console.WriteLine("Choose connection mode:");
             Console.WriteLine("1. AI Model Mode");
-            Console.WriteLine("2. AI Agent Mode");
-            Console.WriteLine("3. Avatar Mode (with video streaming)");
-            Console.Write("Enter your choice (1, 2, or 3): ");
+            Console.WriteLine("2. AI Model + Foundry Agent Mode (Preview: 2026-01-01-preview)");
+            Console.WriteLine("3. AI Agent Mode");
+            Console.WriteLine("4. Avatar Mode (with video streaming)");
+            Console.Write("Enter your choice (1, 2, 3, or 4): ");
 
             while (true)
             {
@@ -748,7 +883,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                     string? input = Console.ReadLine();
                     if (string.IsNullOrEmpty(input))
                     {
-                        Console.Write("Please enter 1, 2, or 3: ");
+                        Console.Write("Please enter 1, 2, 3, or 4: ");
                         continue;
                     }
 
@@ -758,13 +893,16 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                             Console.WriteLine("Selected: AI Model Mode");
                             return ConnectionMode.AIModel;
                         case "2":
+                            Console.WriteLine("Selected: AI Model + Foundry Agent Mode (Preview)");
+                            return ConnectionMode.AIModelWithFoundryAgent;
+                        case "3":
                             Console.WriteLine("Selected: AI Agent Mode");
                             return ConnectionMode.AIAgent;
-                        case "3":
+                        case "4":
                             Console.WriteLine("Selected: Avatar Mode");
                             return ConnectionMode.Avatar;
                         default:
-                            Console.Write("Invalid choice. Please enter 1, 2, or 3: ");
+                            Console.Write("Invalid choice. Please enter 1, 2, 3, or 4: ");
                             break;
                     }
                 }
@@ -773,6 +911,87 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                     logger?.LogError(ex, "Error reading console input");
                     throw;
                 }
+            }
+        }
+
+        /// <summary>
+        ///     Prompts the user for Foundry Agent tool configuration.
+        ///     When agent name is provided, the AI Model session will include a FoundryAgentTool
+        ///     (chat supervisor pattern) and use the preview API version (2026-01-01-preview).
+        /// </summary>
+        private static void PromptFoundryAgentToolConfig()
+        {
+            Console.WriteLine("\n--- Foundry Agent Tool Configuration (2026-01-01-preview) ---");
+            Console.WriteLine("Configure a Foundry Agent as a callable tool for the chat supervisor pattern.");
+            Console.WriteLine("The AI Model (gpt-4o) will act as supervisor and call the Foundry Agent as a tool.");
+            Console.WriteLine("Leave blank to skip (standard AI Model mode with function calling).\n");
+
+            Console.Write("Foundry Agent Name: ");
+            foundryAgentName = Console.ReadLine()?.Trim() ?? "";
+
+            if (!string.IsNullOrEmpty(foundryAgentName))
+            {
+                Console.Write("Agent Description (required): ");
+                foundryAgentDescription = Console.ReadLine()?.Trim() ?? "";
+
+                // Description is required by the server - use a default if empty
+                if (string.IsNullOrEmpty(foundryAgentDescription))
+                {
+                    foundryAgentDescription = $"Foundry Agent tool for {foundryAgentName}";
+                    Console.WriteLine($"  Using default description: \"{foundryAgentDescription}\"");
+                }
+
+                Console.Write("Agent Version (optional, press Enter to skip): ");
+                foundryAgentVersion = Console.ReadLine()?.Trim() ?? "";
+
+                Console.WriteLine(
+                    $"\nFoundry Agent Tool will be configured: {foundryAgentName}" +
+                    $" - \"{foundryAgentDescription}\"" +
+                    (string.IsNullOrEmpty(foundryAgentVersion) ? "" : $" (v{foundryAgentVersion})"));
+            }
+            else
+            {
+                foundryAgentVersion = "";
+                foundryAgentDescription = "";
+                Console.WriteLine("No Foundry Agent Tool configured. Using standard AI Agent mode.");
+            }
+        }
+
+        /// <summary>
+        ///     Prints diagnostic information about the session configuration.
+        ///     Outputs the session.update JSON and WebSocket URI for debugging.
+        /// </summary>
+        /// <param name="sessionOptions">The session options to diagnose.</param>
+        private static void PrintSessionDiagnostics(VoiceLiveSessionOptions sessionOptions)
+        {
+            try
+            {
+                var diagnosticOptions = new JsonSerializerOptions
+                {
+                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+                    WriteIndented = true
+                };
+
+                var sessionUpdateMessage = new
+                {
+                    type = "session.update",
+                    session = sessionOptions
+                };
+
+                var json = JsonSerializer.Serialize(sessionUpdateMessage, diagnosticOptions);
+                Console.WriteLine("\n--- Diagnostic: session.update JSON ---");
+                Console.WriteLine(json);
+                Console.WriteLine("--- End of session.update JSON ---");
+
+                // Print API version info
+                if (voiceLiveClient?.Options != null)
+                {
+                    Console.WriteLine($"API Version: {voiceLiveClient.Options.ApiVersion}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Diagnostic] Failed to serialize session options: {ex.Message}");
             }
         }
 
@@ -792,11 +1011,23 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
 
             try
             {
+                // Use preview API version when Foundry Agent tool is configured
+                VoiceLiveClientOptions clientOptions = null;
+                if (!string.IsNullOrEmpty(foundryAgentName))
+                {
+                    clientOptions = new VoiceLiveClientOptions
+                    {
+                        ApiVersion = VoiceLiveClientOptions.PreviewApiVersion
+                    };
+                    Console.WriteLine($"Using Preview API version: {VoiceLiveClientOptions.PreviewApiVersion}");
+                }
+
                 if (useApiKeyAuth)
                 {
                     // API Key authentication using AzureKeyCredential
                     logger?.LogInformation("Initializing VoiceLiveClient with API Key authentication...");
-                    voiceLiveClient = new VoiceLiveClient(azureEndpoint, new AzureKeyCredential(apiKey));
+                    voiceLiveClient = new VoiceLiveClient(azureEndpoint, new AzureKeyCredential(apiKey),
+                        clientOptions);
                 }
                 else
                 {
@@ -805,7 +1036,8 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                     voiceLiveClient = new VoiceLiveClient(
                         azureEndpoint,
                         new DefaultAzureCredential(),
-                        new[] { azureIdentityTokenRequestUrl });
+                        new[] { azureIdentityTokenRequestUrl },
+                        clientOptions);
                 }
 
                 // Set agent configuration
@@ -903,6 +1135,12 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                 ConnectionMode newMode = ChooseConnectionMode();
                 currentMode = newMode;
 
+                // Prompt for Foundry Agent tool configuration (AI Model + Foundry Agent mode)
+                if (currentMode == ConnectionMode.AIModelWithFoundryAgent)
+                {
+                    PromptFoundryAgentToolConfig();
+                }
+
                 // Initialize audio for new mode
                 InitializeAudio();
 
@@ -913,7 +1151,10 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                 Console.WriteLine($"Reconnecting in {newMode} mode...");
                 VoiceLiveSessionOptions sessionOptions = CreateSessionOptions(newMode);
 
-                if (newMode == ConnectionMode.AIModel)
+                // Diagnostic: Print the session.update JSON that will be sent
+                PrintSessionDiagnostics(sessionOptions);
+
+                if (newMode == ConnectionMode.AIModel || newMode == ConnectionMode.AIModelWithFoundryAgent)
                 {
                     voiceLiveSession = await voiceLiveClient!.StartSessionAsync(sessionOptions);
                 }
@@ -952,10 +1193,14 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
             waveOut = new WaveOutEvent();
 
             // Initialize regular audio provider (24kHz, mono, 16-bit)
+            // Buffer must be large enough to hold audio that arrives faster than real-time.
+            // Server TTS sends audio at ~2.5x real-time, so for a 120-second response,
+            // up to ~72 seconds of audio may accumulate in the buffer.
             waveProvider = new BufferedWaveProvider(new WaveFormat(SampleRate, BitsPerSample, Channels))
             {
-                BufferLength = SampleRate * Channels * 2 * 10, // 10 seconds buffer
-                DiscardOnBufferOverflow = true
+                BufferLength = SampleRate * Channels * 2 * 180, // 180 seconds buffer (~8.6MB)
+                DiscardOnBufferOverflow = true,
+                ReadFully = true
             };
 
             // Initialize Avatar audio provider if in Avatar mode (48kHz, stereo, 16-bit)
@@ -1074,7 +1319,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
         /// <returns>A task representing the asynchronous operation.</returns>
         private static async Task SendImageAsync()
         {
-            if (currentMode != ConnectionMode.AIModel)
+            if (currentMode != ConnectionMode.AIModel && currentMode != ConnectionMode.AIModelWithFoundryAgent)
             {
                 Console.WriteLine("Image input is only supported in AI Model mode.");
                 return;
@@ -1181,14 +1426,16 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
 
         private static async void OnAudioDataAvailable(object? sender, WaveInEventArgs e)
         {
-            if (!isRecording || e.BytesRecorded <= 0 || voiceLiveSession == null) return;
+            // Capture in local variable to avoid TOCTOU race condition
+            var session = voiceLiveSession;
+            if (!isRecording || e.BytesRecorded <= 0 || session == null) return;
 
             try
             {
                 byte[] audioData = new byte[e.BytesRecorded];
                 Array.Copy(e.Buffer, 0, audioData, 0, e.BytesRecorded);
 
-                await voiceLiveSession.SendInputAudioAsync(audioData);
+                await session.SendInputAudioAsync(audioData);
             }
             catch (Exception ex)
             {
@@ -1550,7 +1797,10 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                 Console.WriteLine($"🔄 Reconnecting in {currentMode} mode...");
                 VoiceLiveSessionOptions sessionOptions = CreateSessionOptions(currentMode);
 
-                if (currentMode == ConnectionMode.AIModel)
+                // Diagnostic: Print the session.update JSON that will be sent
+                PrintSessionDiagnostics(sessionOptions);
+
+                if (currentMode == ConnectionMode.AIModel || currentMode == ConnectionMode.AIModelWithFoundryAgent)
                 {
                     voiceLiveSession = await voiceLiveClient!.StartSessionAsync(sessionOptions);
                 }
@@ -1610,16 +1860,28 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
             {
                 logger?.LogInformation("Recreating VoiceLiveClient...");
 
+                // Use preview API version when Foundry Agent tool is configured
+                VoiceLiveClientOptions clientOptions = null;
+                if (!string.IsNullOrEmpty(foundryAgentName))
+                {
+                    clientOptions = new VoiceLiveClientOptions
+                    {
+                        ApiVersion = VoiceLiveClientOptions.PreviewApiVersion
+                    };
+                }
+
                 if (useApiKeyAuth)
                 {
-                    voiceLiveClient = new VoiceLiveClient(azureEndpoint, new AzureKeyCredential(apiKey));
+                    voiceLiveClient = new VoiceLiveClient(azureEndpoint, new AzureKeyCredential(apiKey),
+                        clientOptions);
                 }
                 else
                 {
                     voiceLiveClient = new VoiceLiveClient(
                         azureEndpoint,
                         new DefaultAzureCredential(),
-                        new[] { azureIdentityTokenRequestUrl });
+                        new[] { azureIdentityTokenRequestUrl },
+                        clientOptions);
                 }
 
                 voiceLiveClient.AgentProjectName = agentProjectName;

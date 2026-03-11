@@ -48,6 +48,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         private Task messageHandlingTask;
         private bool disposed;
         private bool enableSessionUpdates;
+        private TaskCompletionSource<bool> sessionCreatedTcs;
 
         #endregion
 
@@ -265,8 +266,18 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
             Logger?.LogInformation("Sending session.update (Avatar: {hasAvatar})", options.Avatar != null ? "configured" : "null");
             Logger?.LogDebug("session.update JSON: {json}", json);
 
-            await SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
-            Logger?.LogInformation("session.update sent successfully");
+            try
+            {
+                await SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
+                Logger?.LogInformation("session.update sent successfully");
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError(ex,
+                    "Failed to send session.update - WebSocket State: {state}, CloseStatus: {closeStatus}, CloseDescription: {closeDescription}",
+                    webSocket.State, webSocket.CloseStatus, webSocket.CloseStatusDescription);
+                throw;
+            }
         }
 
         /// <summary>
@@ -490,14 +501,42 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
 
             Logger?.LogInformation("WebSocket connected, state: {state}", webSocket.State);
 
-            // Send session configuration
-            Logger?.LogInformation("Sending initial session.update...");
-            await ConfigureSessionAsync(Options, cancellationToken).ConfigureAwait(false);
-
-            // Start receive loop
+            // Start receive loop FIRST to receive session.created event
             Logger?.LogInformation("Starting receive and message handling loops...");
+            sessionCreatedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             receiveTask = ReceiveLoopAsync();
             messageHandlingTask = MessageHandlingLoopAsync();
+
+            // Wait for session.created before sending session.update
+            // The API requires: connect → session.created → session.update → session.updated
+            Logger?.LogInformation("Waiting for session.created event...");
+            using (var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
+                timeoutCts.CancelAfter(TimeSpan.FromSeconds(30));
+                try
+                {
+                    var tcsTask = sessionCreatedTcs.Task;
+                    var delayTask = Task.Delay(Timeout.Infinite, timeoutCts.Token);
+                    var completedTask = await Task.WhenAny(tcsTask, delayTask).ConfigureAwait(false);
+
+                    if (completedTask == tcsTask)
+                    {
+                        Logger?.LogInformation("session.created received successfully");
+                    }
+                    else
+                    {
+                        Logger?.LogWarning("Timed out waiting for session.created event (30s)");
+                    }
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    Logger?.LogWarning("Timed out waiting for session.created event (30s)");
+                }
+            }
+
+            // Send session configuration after session.created
+            Logger?.LogInformation("Sending initial session.update...");
+            await ConfigureSessionAsync(Options, cancellationToken).ConfigureAwait(false);
 
             Logger?.LogInformation("Session connected successfully, waiting for server events...");
         }
@@ -508,7 +547,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
 
         private async Task ReceiveLoopAsync()
         {
-            var buffer = new byte[4096];
+            var buffer = new byte[16384];
             var messageBuffer = new StringBuilder();
 
             try
@@ -529,6 +568,14 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
                         {
                             var completeMessage = messageBuffer.ToString();
                             messageBuffer.Clear();
+
+                            // Detect session.created to unblock ConnectAsync
+                            if (sessionCreatedTcs != null && !sessionCreatedTcs.Task.IsCompleted
+                                && completeMessage.Contains("\"session.created\""))
+                            {
+                                sessionCreatedTcs.TrySetResult(true);
+                            }
+
                             lock (receivedMessages)
                             {
                                 receivedMessages.Enqueue(completeMessage);
@@ -537,7 +584,12 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
                     }
                     else if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        Logger?.LogInformation("WebSocket close received");
+                        Logger?.LogInformation(
+                            "WebSocket close received - Status: {status}, Description: {description}",
+                            webSocket.CloseStatus, webSocket.CloseStatusDescription);
+                        Logger?.LogError(
+                            "WebSocket connection closed by server - Status: {status}, Description: {description}",
+                            webSocket.CloseStatus, webSocket.CloseStatusDescription);
                         break;
                     }
                 }
@@ -556,91 +608,110 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         {
             while (!cancellationTokenSource.Token.IsCancellationRequested)
             {
-                string json = null;
-                lock (receivedMessages)
+                // Drain all available messages before waiting
+                bool processedAny = false;
+                while (true)
                 {
-                    if (receivedMessages.Count > 0)
+                    string json = null;
+                    lock (receivedMessages)
                     {
-                        json = receivedMessages.Dequeue();
-                    }
-                }
-
-                if (json == null)
-                {
-                    await Task.Delay(10, cancellationTokenSource.Token).ConfigureAwait(false);
-                    continue;
-                }
-
-                try
-                {
-                    var document = JsonDocument.Parse(json);
-                    var root = document.RootElement;
-
-                    if (!root.TryGetProperty("type", out var typeElement))
-                    {
-                        Logger?.LogWarning("Message has no type field");
-                        continue;
-                    }
-
-                    var messageType = typeElement.GetString();
-                    if (string.IsNullOrEmpty(messageType))
-                    {
-                        Logger?.LogWarning("Message type is null or empty");
-                        continue;
-                    }
-
-                    // Use Information level for session events to ensure visibility
-                    if (messageType.StartsWith("session.") || messageType.StartsWith("error"))
-                    {
-                        Logger?.LogInformation("Received message type: {type}", messageType);
-                    }
-                    else
-                    {
-                        Logger?.LogDebug("Processing message type: {type}", messageType);
-                    }
-
-                    // Process with traditional handlers
-                    var handlerFound = false;
-                    foreach (var manager in managers)
-                    {
-                        if (manager.GetRegisteredHandlers().TryGetValue(messageType, out var handler))
+                        if (receivedMessages.Count > 0)
                         {
-                            handlerFound = true;
-                            Logger?.LogDebug("Handler found for message type: {type}", messageType);
-                            try
-                            {
-                                await handler.HandleAsync(root).ConfigureAwait(false);
-                            }
-                            catch (Exception handlerEx)
-                            {
-                                Logger?.LogError(handlerEx, "Handler exception for message type: {type}", messageType);
-                            }
+                            json = receivedMessages.Dequeue();
                         }
                     }
 
-                    if (!handlerFound)
-                    {
-                        Logger?.LogDebug("No handler registered for message type: {type}", messageType);
-                    }
+                    if (json == null) break;
 
-                    // If SessionUpdates are enabled, convert and write to channel
-                    if (enableSessionUpdates)
-                    {
-                        await WriteSessionUpdateAsync(messageType, root).ConfigureAwait(false);
-                    }
+                    processedAny = true;
+                    await ProcessSingleMessageAsync(json).ConfigureAwait(false);
                 }
-                catch (JsonException ex)
+
+                if (!processedAny)
                 {
-                    Logger?.LogError(ex, "Failed to parse JSON message");
-                }
-                catch (Exception ex)
-                {
-                    Logger?.LogError(ex, "Failed to process message");
+                    // Only wait when the queue was completely empty
+                    await Task.Delay(1, cancellationTokenSource.Token).ConfigureAwait(false);
                 }
             }
 
             // Complete the channel when done
             sessionUpdateChannel.Writer.TryComplete();
+        }
+
+        private async Task ProcessSingleMessageAsync(string json)
+        {
+            try
+            {
+                var document = JsonDocument.Parse(json);
+                var root = document.RootElement;
+
+                if (!root.TryGetProperty("type", out var typeElement))
+                {
+                    Logger?.LogWarning("Message has no type field");
+                    return;
+                }
+
+                var messageType = typeElement.GetString();
+                if (string.IsNullOrEmpty(messageType))
+                {
+                    Logger?.LogWarning("Message type is null or empty");
+                    return;
+                }
+
+                // Use Information level for session events to ensure visibility
+                if (messageType.StartsWith("session.") || messageType.StartsWith("error"))
+                {
+                    Logger?.LogInformation("Received message type: {type}", messageType);
+                }
+
+                // Log raw JSON for error events at Error level to ensure visibility
+                if (messageType == "error")
+                {
+                    Logger?.LogError("Server error raw JSON: {json}", json);
+                }
+                else
+                {
+                    Logger?.LogDebug("Processing message type: {type}", messageType);
+                }
+
+                // Process with traditional handlers
+                var handlerFound = false;
+                foreach (var manager in managers)
+                {
+                    if (manager.GetRegisteredHandlers().TryGetValue(messageType, out var handler))
+                    {
+                        handlerFound = true;
+                        Logger?.LogDebug("Handler found for message type: {type}", messageType);
+                        try
+                        {
+                            await handler.HandleAsync(root).ConfigureAwait(false);
+                        }
+                        catch (Exception handlerEx)
+                        {
+                            Logger?.LogError(handlerEx, "Handler exception for message type: {type}", messageType);
+                        }
+                    }
+                }
+
+                if (!handlerFound)
+                {
+                    Logger?.LogDebug("No handler registered for message type: {type}", messageType);
+                }
+
+                // If SessionUpdates are enabled, convert and write to channel
+                if (enableSessionUpdates)
+                {
+                    await WriteSessionUpdateAsync(messageType, root).ConfigureAwait(false);
+                }
+            }
+            catch (JsonException ex)
+            {
+                Logger?.LogError(ex, "Failed to parse JSON message");
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError(ex, "Failed to process message");
+            }
         }
 
         private async Task WriteSessionUpdateAsync(string messageType, JsonElement root)
