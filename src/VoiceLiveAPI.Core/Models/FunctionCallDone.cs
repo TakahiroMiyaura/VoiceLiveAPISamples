@@ -3,7 +3,6 @@
 // https://opensource.org/license/bsl-1-0
 
 using System.Text.Json.Serialization;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Events;
 
 namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Models
 {
@@ -13,7 +12,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Models
     /// <remarks>
     ///     This is the recommended replacement for the legacy <c>ResponseFunctionCallArgumentsDoneMessage</c> class.
     /// </remarks>
-    public class FunctionCallDone : ServerEvent
+    public class FunctionCallDone : ToolCallArgumentsDone
     {
         #region Static Fields and Constants
 
@@ -30,24 +29,6 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Models
         public override string Type => TypeName;
 
         /// <summary>
-        ///     Gets or sets the response identifier.
-        /// </summary>
-        [JsonPropertyName("response_id")]
-        public string ResponseId { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the item identifier.
-        /// </summary>
-        [JsonPropertyName("item_id")]
-        public string ItemId { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the output index.
-        /// </summary>
-        [JsonPropertyName("output_index")]
-        public int OutputIndex { get; set; }
-
-        /// <summary>
         ///     Gets or sets the call identifier.
         /// </summary>
         [JsonPropertyName("call_id")]
@@ -58,12 +39,6 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Models
         /// </summary>
         [JsonPropertyName("name")]
         public string Name { get; set; }
-
-        /// <summary>
-        ///     Gets or sets the complete function arguments as a JSON string.
-        /// </summary>
-        [JsonPropertyName("arguments")]
-        public string Arguments { get; set; }
 
         #endregion
 

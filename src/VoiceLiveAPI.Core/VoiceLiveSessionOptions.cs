@@ -157,13 +157,13 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         public int? InputAudioSamplingRate { get; set; }
 
         /// <summary>
-        ///     Gets or sets the tools (functions) available for the AI model to call.
+        ///     Gets or sets the tools available for the AI model to call.
         /// </summary>
         /// <value>
-        ///     An array of <see cref="Function" /> objects defining available tools.
+        ///     An array of <see cref="ToolDefinition" /> objects (e.g., <see cref="Function" />, <see cref="McpToolConfig" />).
         /// </value>
         [JsonPropertyName("tools")]
-        public Function[] Tools { get; set; }
+        public ToolDefinition[] Tools { get; set; }
 
         /// <summary>
         ///     Gets or sets the tool choice preference.
@@ -173,6 +173,26 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         /// </value>
         [JsonPropertyName("tool_choice")]
         public string ToolChoice { get; set; }
+
+        /// <summary>
+        ///     Gets or sets whether the model may call multiple tools in parallel within a single turn.
+        ///     Defaults to <c>true</c> on the service; set to <c>false</c> for sequential tool calls.
+        ///     Available in API version 2026-06-01-preview and later.
+        /// </summary>
+        [JsonPropertyName("parallel_tool_calls")]
+        public bool? ParallelToolCalls { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the interim-response configuration, which bridges tool-call / high-latency gaps with
+        ///     short spoken filler. Typed as <see cref="object" />; set an anonymous object matching the wire
+        ///     schema (<c>{ "type": "llm-interim-response" | "static-interim-response", ... }</c>). The wire key
+        ///     is <c>interim_response</c> (snake_case; the API-reference JSON example's hyphenated
+        ///     <c>interim-response</c> is a doc typo — the service rejects the hyphen form). Model mode requires
+        ///     a cascaded text LLM with an Azure voice (realtime audio models don't support it). Available in
+        ///     API version 2026-01-01-preview and later.
+        /// </summary>
+        [JsonPropertyName("interim_response")]
+        public object InterimResponse { get; set; }
 
         /// <summary>
         ///     Gets or sets the temperature for response generation.

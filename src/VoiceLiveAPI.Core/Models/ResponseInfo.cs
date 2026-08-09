@@ -55,6 +55,19 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Models
         public object StatusDetails { get; set; }
 
         /// <summary>
+        ///     Gets or sets the identifier of the conversation this response belongs to.
+        /// </summary>
+        /// <remarks>
+        ///     Populated in agent sessions, where it is the Foundry conversation (<c>conv_…</c>) the agent kept
+        ///     the turn in. It is the only handle an agent session gives you on the agent's own execution:
+        ///     listing responses (<c>{project endpoint}/openai/v1/responses</c>) and matching on each one's
+        ///     <c>conversation.id</c> yields the response that answered, including the model — which is how you
+        ///     find out what a Model Router deployment actually picked.
+        /// </remarks>
+        [JsonPropertyName("conversation_id")]
+        public string ConversationId { get; set; }
+
+        /// <summary>
         ///     Gets a value indicating whether the response completed successfully.
         /// </summary>
         public bool IsCompleted => Status == "completed";

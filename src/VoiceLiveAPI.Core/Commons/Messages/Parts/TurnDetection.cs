@@ -60,7 +60,17 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts
         public bool? RemoveFillerWords { get; set; }
 
         /// <summary>
-        ///     Gets or sets the configuration for end-of-utterance detection.
+        ///     Gets or sets a value indicating whether the service auto-truncates the last response to the
+        ///     portion the user actually heard when they barge in (requires <see cref="InterruptResponse" />).
+        ///     Available in API version 2026-01-01-preview and later.
+        /// </summary>
+        [JsonPropertyName("auto_truncate")]
+        public bool? AutoTruncate { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the configuration for end-of-utterance / end-of-turn detection nested in a VAD.
+        ///     For 2026-06-01-preview smart end-of-turn detection, set this to an object with
+        ///     <c>model = "smart_end_of_turn_detection"</c>, <c>threshold_level</c>, and <c>timeout_ms</c>.
         /// </summary>
         [JsonPropertyName("end_of_utterance_detection")]
         public object EndOfUtteranceDetection { get; set; } = null;

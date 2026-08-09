@@ -4,7 +4,7 @@
 
 using Microsoft.Extensions.Logging;
 
-namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
+namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars.Streaming
 {
     /// <summary>
     ///     Reconstructs H.264 stream with periodic SPS/PPS injection for proper playback.

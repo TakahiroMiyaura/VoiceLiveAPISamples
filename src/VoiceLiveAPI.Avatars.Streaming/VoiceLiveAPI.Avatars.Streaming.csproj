@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars.Streaming</RootNamespace>
+    <AssemblyName>Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars.Streaming</AssemblyName>
+    <Description>Sample media pipeline for avatar streaming (H.264 reconstruction + FFmpeg/FFplay + Opus/NAudio playback) built on VoiceLiveAPI.Avatars. Shared by the console samples.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.8" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="Concentus" Version="2.2.2" />
+    <PackageReference Include="SIPSorceryMedia.Abstractions" Version="8.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VoiceLiveAPI.Avatars\VoiceLiveAPI.Avatars.csproj" />
+  </ItemGroup>
+
+</Project>

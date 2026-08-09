@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -29,9 +29,16 @@
     </None>
   </ItemGroup>
 
+  <!-- Sample image for the 'I' (send image) command, copied next to the executable. -->
   <ItemGroup>
-    <PackageReference Include="Azure.AI.VoiceLive" Version="1.0.0" />
-    <PackageReference Include="Azure.Identity" Version="1.14.2" />
+    <None Include="Assets\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.AI.VoiceLive" Version="1.1.0" />
+    <!-- Azure.Identity 参照は削除: Azure.Core 1.57.0 が DefaultAzureCredential 等の credential 型を取り込んだため、
+         Azure.Identity 1.14.2 を併用すると Azure.Identity.DefaultAzureCredential が二重定義され CS0433 衝突する。
+         必要な DefaultAzureCredential は Azure.Core (SDK 経由で 1.57.0 が推移的に解決) から供給される。 -->
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.8" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.8" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.8" />
@@ -45,6 +52,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\VoiceLiveAPI.Avatars\VoiceLiveAPI.Avatars.csproj" />
+    <ProjectReference Include="..\VoiceLiveAPI.Avatars.Streaming\VoiceLiveAPI.Avatars.Streaming.csproj" />
   </ItemGroup>
 
 </Project>

@@ -5,7 +5,7 @@
 using System.Text;
 using Microsoft.Extensions.Logging;
 
-namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
+namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars.Streaming
 {
     /// <summary>
     ///     Analyzes H.264 stream structure and NAL units.

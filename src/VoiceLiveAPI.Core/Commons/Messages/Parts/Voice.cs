@@ -24,6 +24,13 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts
         public string Type { get; set; } = null;
 
         /// <summary>
+        ///     Gets or sets the base model for a personal voice (<c>type = "azure-personal"</c>), for example
+        ///     <c>DragonLatestNeural</c>, <c>DragonHDOmniLatestNeural</c>, or <c>MAI-Voice-1</c>.
+        /// </summary>
+        [JsonPropertyName("model")]
+        public string Model { get; set; } = null;
+
+        /// <summary>
         ///     Gets or sets the temperature value for the voice configuration.
         /// </summary>
         [JsonPropertyName("temperature")]

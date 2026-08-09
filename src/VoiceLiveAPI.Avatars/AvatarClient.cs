@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Takahiro Miyaura
+// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
@@ -9,12 +9,8 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Core;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commands.Messages;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Logs;
 using Microsoft.Extensions.Logging;
-using SIPSorcery;
+using Microsoft.Extensions.Logging.Abstractions;
 using SIPSorcery.Net;
 using SIPSorceryMedia.Abstractions;
 
@@ -40,11 +36,21 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
 
 
     /// <summary>
-    ///     Provides functionality to manage avatar video and audio streams,
-    ///     handle connection setup, and process received media frames for the VoiceLiveAPI.
+    ///     Provides a dependency-neutral WebRTC media client for avatar video and audio streams:
+    ///     it negotiates RecvOnly H.264 / Opus tracks, creates the SDP offer, applies the server's
+    ///     SDP answer, and raises events for received media frames.
     /// </summary>
-    public class AvatarClient : ILogOutputClass
+    /// <remarks>
+    ///     This client handles only the media plane and does not depend on any session SDK. The SDP
+    ///     signaling (sending the offer / receiving the answer) is performed by the caller using either
+    ///     the official <c>Azure.AI.VoiceLive</c> SDK (<c>ConnectAvatarAsync</c> /
+    ///     <c>SessionUpdateAvatarConnecting</c>) or the self-made Core, then handed back via
+    ///     <see cref="CreateSdpOfferStringAsync" /> and <see cref="AvatarConnecting" />.
+    /// </remarks>
+    public class AvatarClient
     {
+        #region Private Fields
+
         /// <summary>
         ///     Latest audio RTP timestamp (48000Hz clock).
         /// </summary>
@@ -57,10 +63,31 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
 
         private RTCPeerConnection pc;
 
+        #endregion
+
+        #region Properties
+
         /// <summary>
         ///     Provides logging functionality for the AvatarClient class.
         /// </summary>
-        public ILogger Logger => LoggerFactoryManager.CreateLogger<AvatarClient>();
+        public ILogger Logger { get; }
+
+        #endregion
+
+        #region Constructors
+
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="AvatarClient" /> class.
+        /// </summary>
+        /// <param name="logger">The logger instance. Falls back to a no-op logger when null.</param>
+        public AvatarClient(ILogger logger = null)
+        {
+            Logger = logger ?? NullLogger.Instance;
+        }
+
+        #endregion
+
+        #region Events
 
         /// <summary>
         ///     Avatar Video Frame Received Event.
@@ -71,37 +98,19 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
         ///     Avatar Audio Frame Received Event.
         /// </summary>
         public event AudioFrameReceivedDelegate OnAudioFrameReceived;
-        
-        /// <summary>
-        ///     Send avatar connect message using the new VoiceLiveSession API.
-        /// </summary>
-        /// <param name="server">ICE server information.</param>
-        /// <param name="session">Instance of VoiceLiveSession.</param>
-        public async Task AvatarConnectAsync(IceServers server, VoiceLiveSession session)
-        {
-            var sdpData = await CreateSdpOfferAsync(server);
-            await sdpData.SendAsync(session);
-        }
+
+        #endregion
+
+        #region public methods
 
         /// <summary>
-        ///     Creates a Base64-encoded SDP offer string for use with external session APIs (e.g., Azure.AI.VoiceLive SDK).
+        ///     Creates a Base64-encoded SDP offer string for use with a session API (e.g. the official
+        ///     Azure.AI.VoiceLive SDK's <c>ConnectAvatarAsync</c>, or the self-made Core).
         /// </summary>
         /// <param name="server">ICE server information.</param>
-        /// <returns>A Base64-encoded SDP offer string suitable for ConnectAvatarAsync.</returns>
-        public async Task<string> CreateSdpOfferStringAsync(IceServers server)
+        /// <returns>A Base64-encoded SDP offer string.</returns>
+        public async Task<string> CreateSdpOfferStringAsync(AvatarIceServer server)
         {
-            var sdpData = await CreateSdpOfferAsync(server);
-            return sdpData.ClientSdp;
-        }
-
-        /// <summary>
-        ///     Creates the SDP offer for avatar connection.
-        /// </summary>
-        /// <param name="server">ICE server information.</param>
-        /// <returns>SessionAvatarConnect with the SDP offer.</returns>
-        private async Task<SessionAvatarConnect> CreateSdpOfferAsync(IceServers server)
-        {
-            LogFactory.Set(LoggerFactoryManager.Current);
             var cfg = new RTCConfiguration
             {
                 iceServers = new List<RTCIceServer>
@@ -152,10 +161,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
             sdp = sdp.Replace("\r", "\\r").Replace("\n", "\\n");
             sdp = $"{{\"type\": \"offer\",\"sdp\": \"{sdp}\"}}";
 
-            return new SessionAvatarConnect
-            {
-                ClientSdp = Convert.ToBase64String(Encoding.UTF8.GetBytes(sdp))
-            };
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(sdp));
         }
 
         /// <summary>
@@ -173,6 +179,10 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
                 type = RTCSdpType.answer
             });
         }
+
+        #endregion
+
+        #region private methods
 
         private void SetLogProc()
         {
@@ -299,5 +309,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars
                 Logger.LogTrace("[Avatar][timeout] {media} stream no packets for a while.", media);
             };
         }
+
+        #endregion
     }
 }

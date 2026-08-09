@@ -8,10 +8,19 @@ A .NET 8 console application and reusable client library for real-time voice con
 
 ## Features
 
-- **Triple Connection Modes**:
-  - **AI Model Mode**: Direct connection to Azure AI models (GPT-4o, etc.)
-  - **AI Agent Mode**: Connection to custom AI agents with specialized configurations
-  - **Avatar Mode**: WebRTC video streaming with real-time H.264 video and Opus audio
+- **Standard modes** (generally available):
+  - **AI Model**: direct connection to an Azure AI model (GPT-4o and friends)
+  - **AI Agent**: connection to a Foundry agent, whose prompt and tools live in the cloud
+  - **Avatar**: WebRTC video streaming with H.264 video and Opus audio
+
+- **Preview features**, exercised one at a time so a failure points at one thing:
+  - **Photo avatar** (`vasa-1`): a talking head generated from a single portrait, standard or your own
+  - **azure-personal voice**: your own voice, and it composes with an avatar
+  - **Client-side echo cancellation reference**: interleaved mic + played audio
+  - **WebRTC voice** (`/calls`), **WebSocket avatar video** (`response.video.delta`)
+  - **MCP servers**, **Foundry agent as a tool**, **parallel tool calls**, **smart end-of-turn**,
+    **auto-truncation**, **interim response**, **proactive greeting**, **native voice**
+  - The list is scoped to the API version you pick, so you only see what that version actually has
 
 - **Multiple Authentication Methods**:
   - API Key authentication
@@ -26,17 +35,23 @@ A .NET 8 console application and reusable client library for real-time voice con
 
 This repository contains two console application samples:
 
+**Which one to start with**: if you want the stable feature set with the least machinery, use
+**VoiceLiveSDKConsoleApp**. If you want the preview additions, use **VoiceLiveConsoleApp** — the
+official .NET SDK currently tops out at the `2026-01-01-preview` wire version, so features that
+only exist in `2026-06-01-preview` cannot be reached through it at all.
+
 ### VoiceLiveConsoleApp (Custom WebSocket Implementation)
 
-A console application utilizing "VoiceLiveAPI.Core," a custom WebSocket library built from scratch based on the Foundry Tools Voice Live API specifications.
+A console application utilizing "VoiceLiveAPI.Core," a custom WebSocket library built from scratch based on the Foundry Tools Voice Live API specifications. It is where the preview features live, because talking to the wire directly is what makes them reachable.
 
 - **Direct WebSocket control**: Full control over WebSocket communication
 - **Custom message handling**: Event-based handlers via `ServerMessageHandlerManager`
-- **Legacy compatibility**: Works with existing VoiceLiveAPI.* libraries
+- **Preview features**: one at a time, scoped to the API version you pick
 
 ### VoiceLiveSDKConsoleApp (Azure.AI.VoiceLive SDK)
 
-A new console application that uses the official **Azure.AI.VoiceLive SDK** package.
+A console application that uses the official **Azure.AI.VoiceLive SDK** package, covering the four
+stable patterns: AI Model, AI Agent, and Avatar on either backend.
 
 - **Official SDK**: Uses Microsoft's official Azure.AI.VoiceLive NuGet package
 - **Simplified API**: `VoiceLiveClient` and `VoiceLiveSession` classes from the SDK
@@ -48,7 +63,9 @@ A new console application that uses the official **Azure.AI.VoiceLive SDK** pack
 | WebSocket Implementation | Custom (VoiceLiveAPI.Core) | Azure.AI.VoiceLive SDK |
 | Session Management | VoiceLiveSession (Core) | VoiceLiveSession (SDK) |
 | Message Handling | ServerMessageHandlerManager events | IAsyncEnumerable pattern |
-| Avatar Video Streaming | VoiceLiveAPI.Avatars | VoiceLiveAPI.Avatars |
+| API version | up to `2026-06-01-preview` | up to `2026-01-01-preview` (SDK limit) |
+| Preview features | 14, chosen from a menu | — |
+| Avatar Video Streaming | WebRTC and WebSocket | WebRTC |
 | Authentication | API Key / Entra ID | API Key / Entra ID |
 
 #### Running VoiceLiveSDKConsoleApp
@@ -71,11 +88,10 @@ PS D:\hoge\VoiceLiveAPISamples > dotnet run --project src/VoiceLiveSDKConsoleApp
 
 | Package Name                                 | Version         | Purpose                    |
 |----------------------------------------------|-----------------|----------------------------|
-| Azure.Identity                               | 1.14.2          | Azure authentication       |
 | Microsoft.Extensions.Configuration           | 9.0.8           | Configuration management   |
 | Microsoft.Extensions.Configuration.UserSecrets | 9.0.8        | Secure configuration       |
 | Microsoft.Extensions.Logging                | 9.0.8           | Logging infrastructure     |
-| System.Text.Json                             | 9.0.8           | JSON serialization         |
+| System.Text.Json                             | 10.0.3          | JSON serialization         |
 | NAudio                                       | 2.2.1           | Cross-platform audio      |
 | SIPSorcery                                   | 8.0.23          | WebRTC implementation      |
 | SIPSorceryMedia.Abstractions                | 8.0.12          | Media format abstractions |
@@ -83,14 +99,21 @@ PS D:\hoge\VoiceLiveAPISamples > dotnet run --project src/VoiceLiveSDKConsoleApp
 | FFMpegCore                                   | 5.1.0           | FFmpeg integration         |
 | CliWrap                                      | 3.6.6           | Command line process wrapper |
 
+> [!NOTE]
+> `Azure.Identity` への直接参照は削除しました。`DefaultAzureCredential` などの資格情報型は `Azure.Core` (1.57.0) が提供します（`Azure.Identity` を併用すると `Azure.Identity.DefaultAzureCredential` が二重定義され CS0433 衝突するため）。
+
 ### VoiceLiveSDKConsoleApp (Additional)
 
 | Package Name                                 | Version         | Purpose                    |
 |----------------------------------------------|-----------------|----------------------------|
-| Azure.AI.VoiceLive                           | 1.0.0           | Official Azure VoiceLive SDK |
+| Azure.AI.VoiceLive                           | 1.1.0 (GA)      | Official Azure VoiceLive SDK |
 
 > [!NOTE]
-> VoiceLiveSDKConsoleApp also uses NAudio, Concentus, and SIPSorcery packages for audio/video processing.
+> VoiceLiveSDKConsoleApp also uses NAudio, Concentus, and SIPSorcery packages for audio/video processing
+> (the avatar media pipeline lives in the shared `VoiceLiveAPI.Avatars.Streaming` library).
+>
+> **Agent mode requires Microsoft Entra ID authentication** (`DefaultAzureCredential`); the Voice Live
+> service does not accept API keys for agent invocation. AI Model mode supports API key auth.
 
 ### External Dependencies (Avatar Mode)
 - **FFmpeg**: Required for H.264 video processing and MPEGTS container generation
@@ -146,11 +169,40 @@ PS D:\hoge\VoiceLiveAPISamples > dotnet build src\VoiceLiveConsoleApp
 PS D:\hoge\VoiceLiveAPISamples > dotnet run --project src/VoiceLiveConsoleApp
 ```
 
+
+### Configuration
+
+Every setting can go in user secrets. What differs is how you override it, and that follows from what the
+setting is for:
+
+| Category | Examples | Override with |
+|---|---|---|
+| **Connection and credentials** — fixed per environment | endpoint, API key, agent name/project, model | **environment variable** (`VOICELIVE_ENDPOINT`, ...) |
+| **Feature inputs** — change per run | personal voice, photo avatar, MCP server, greeting | **command-line argument** (`--photo-avatar`, ...) |
+| **Diagnostics** — one run only | wire trace, log level | **command-line argument** (`--wire-debug`, ...) |
+
+Values resolve as **default -> user secrets -> environment variable -> command-line argument**, so the
+narrower the scope, the higher it wins. Flags accept `1`, `true`, `yes` or `on` from any source, or the
+bare switch on the command line.
+
+To list every setting, how it can be supplied, and where its value is currently coming from:
+
+```powershell
+PS D:\hoge\VoiceLiveAPISamples > dotnet run --project src/VoiceLiveConsoleApp -- --help
+```
+
+Examples:
+
+```powershell
+PS ...> dotnet run --project src/VoiceLiveConsoleApp -- --photo-avatar ren --personal-voice <speaker-profile-guid>
+PS ...> dotnet run --project src/VoiceLiveConsoleApp -- --wire-debug
+PS ...> dotnet run --project src/VoiceLiveConsoleApp -- --log-level Information --resolve-agent-model
+```
 ## Usage
 
 ### Console Application
 
-Run the application and choose between AI Model, AI Agent, or Avatar mode:
+The menu asks what you want first: the stable feature set, or one of the preview additions.
 
 > [!CAUTION]
 > The API key can only be used in AI Model Mode.
@@ -158,35 +210,102 @@ Run the application and choose between AI Model, AI Agent, or Avatar mode:
 > Before using Entra ID authentication, ensure you have logged in using the Azure CLI (`az login`).
 
 ```
-Choose connection mode:
-1. AI Model Mode
-2. AI Agent Mode
-3. Avatar Mode (with video streaming)
-Enter your choice (1, 2, or 3): 3
+Choose:
+1. Standard features  (GA — talk to a model, an agent, or an avatar)
+2. Preview features   (try one addition of a preview API version)
+Enter your choice (1 or 2): 1
+
+Choose a standard mode:
+1. AI Model   (talk to a model)
+2. AI Agent   (talk to a Foundry agent)
+3. Avatar     (model or agent, with WebRTC video)
+Enter your choice (1-3): 3
+
+Choose Avatar session backend:
+1. Agent (Foundry agent, Entra ID required)
+2. Model (direct model session, enables image input)
+Enter your choice (1 or 2) [default: 1]: 1
 
 Choose authentication method:
 1. API Key
 2. Entra ID (DefaultAzureCredential)
 Enter your choice (1 or 2): 2
 
+Ready for conversation!
 Commands:
-- Press 'R' to start/stop recording (auto-stops when speech ends)
-- Press 'P' to start/stop playback
-- Press 'M' to switch modes
-- Press 'C' to clear audio queue
-- Press 'S' to show detailed status
-- Press 'V' to toggle avatar video streaming (Avatar mode only)
-- Press 'F' to start FFplay (Avatar mode only)
-- Press 'T' to test connection and reconnect if needed
-- Press 'Q' to quit
-
-**Recording Auto-Stop**: Recording automatically stops when Azure AI detects your speech has ended. This prevents environmental noise from interrupting AI responses. You can still manually stop by pressing 'R' again.
+- 'R' record (auto-stops when you finish speaking)
+- 'X' send text
+- 'I' send an image
+- 'Q' quit
+  (diagnostics: 'S' status, 'C' clear audio, 'P' playback, 'T' reconnect, 'M' switch mode)
 ```
+
+**Recording Auto-Stop**: recording stops on its own once the service detects you have finished
+speaking, so background noise doesn't cut into the answer. Press 'R' again to stop it yourself.
+
+Choosing **2. Preview features** asks for the API version first — that scopes the list to what the
+version actually supports — and then for the one feature to exercise:
+
+```
+Choose API version (VoiceLiveConsoleApp targets preview wire versions):
+1. 2026-01-01-preview
+2. 2026-06-01-preview
+Enter your choice (1-2) [default: 2]: 2
+
+Choose a 2026-06-01-preview feature to check (runs as an AI Model session):
+ 1. Auto-truncation (turn_detection.auto_truncate on barge-in)
+ 2. WebRTC voice (RTP audio over /calls instead of the WebSocket)
+ 3. Avatar with WebSocket video (response.video.delta, no SDP/ICE)
+ 4. Photo avatar (talking head generated from a single image by vasa-1)
+ 5. Smart end-of-turn detection
+ ...
+```
+
+Each feature prints how to try it once the session is up.
 
 #### Avatar Mode Features
 - **Real-time Video**: H.264 video streaming with automatic SPS/PPS reconstruction
 - **Audio Integration**: Opus audio capture and MPEGTS multiplexing
-- **FFplay Integration**: Press 'F' to launch video playback
+- **FFplay Integration**: the video window opens automatically once frames arrive
+- **Backend**: an avatar is an output layer, so it runs on either an agent or a model session.
+  The model backend also enables image input.
+
+#### Photo avatar
+
+A photo avatar is a talking head generated from a single portrait by `vasa-1`, rather than a
+pre-rendered character. Pick it under **Preview features**; the standard character is `sakura`.
+
+```powershell
+PS ...> dotnet run --project src/VoiceLiveConsoleApp -- --photo-avatar ren
+```
+
+To use one you created yourself in Microsoft Foundry (Build → Fine-tune → AI Services →
+*Azure Speech - Text to Speech Avatar* → Type = **Photo avatar**), just name it — there is no
+deployment step, and a name that isn't a standard talking head is sent as a custom avatar
+automatically:
+
+```powershell
+PS ...> dotnet run --project src/VoiceLiveConsoleApp -- --photo-avatar my-avatar
+```
+
+It differs from the video avatar in ways worth knowing: `vasa-1` is required, the standard
+characters have no styles, no crop is needed (the frame is already a head shot), and
+`video.resolution` is not honored — frames arrive at the source portrait's aspect ratio.
+
+#### Your own voice on an avatar
+
+Voice and avatar are independent settings, so a personal voice can drive an avatar. That gets you
+"my face, my voice" from **one photo and about thirty seconds of audio**, where a custom video
+avatar's voice-sync would need ten minutes of consistent studio recording.
+
+```powershell
+PS ...> dotnet run --project src/VoiceLiveConsoleApp -- --photo-avatar my-avatar --personal-voice <speaker-profile-guid>
+```
+
+> [!NOTE]
+> `--personal-voice` takes the **speaker profile ID** — a GUID that currently appears only in the
+> URL of the personal voice page in the portal, not the voice name and not the "Profile ID" the
+> page displays.
 
 ## API Reference
 
@@ -524,6 +643,17 @@ WebSocketState state = session.State;
 | `VoiceLiveClientOptions` | Configuration options for client behavior |
 | `ServerMessageHandlerManager` | Event-based server message processing |
 | `AvatarMessageHandlerManager` | Avatar-specific message handling |
+
+### Console Classes (VoiceLiveConsoleApp)
+
+| Class | Description |
+|-------|-------------|
+| `ConsoleSettings` | Every setting and how it can be supplied; also generates `--help` |
+| `ConsoleMenu` | The startup prompts, returning the answers as a value |
+| `AudioPipeline` | Microphone, speakers, barge-in gating, echo reference |
+| `AvatarSession` | Avatar configuration, transport, and SDP/ICE negotiation |
+| `AgentModelResolver` | Which model actually answered (useful behind Model Router) |
+| `PreviewFeatureCatalog` | The preview features — one entry per feature |
 
 ### Avatar Classes
 

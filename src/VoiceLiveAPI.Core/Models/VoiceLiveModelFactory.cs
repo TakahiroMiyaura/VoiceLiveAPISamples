@@ -38,13 +38,18 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Models
                 Instructions = GetStringProperty(sessionElement, "instructions")
             };
 
+            // Check the value kind first: TryGetInt64/TryGetDouble throw (rather than returning false) when
+            // the element isn't a number, and the service does send nulls here — an agent session, for
+            // example, reports "expires_at": null and omits "temperature".
             if (sessionElement.TryGetProperty("expires_at", out var expiresAt) &&
+                expiresAt.ValueKind == JsonValueKind.Number &&
                 expiresAt.TryGetInt64(out var expiresAtValue))
             {
                 info.ExpiresAt = expiresAtValue;
             }
 
             if (sessionElement.TryGetProperty("temperature", out var temp) &&
+                temp.ValueKind == JsonValueKind.Number &&
                 temp.TryGetDouble(out var tempValue))
             {
                 info.Temperature = tempValue;
@@ -424,7 +429,10 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Models
 
         private static int GetIntProperty(JsonElement element, string propertyName)
         {
-            return element.TryGetProperty(propertyName, out var prop) && prop.TryGetInt32(out var value)
+            // TryGetInt32 throws on a non-numeric element (including null), so gate on the value kind.
+            return element.TryGetProperty(propertyName, out var prop)
+                   && prop.ValueKind == JsonValueKind.Number
+                   && prop.TryGetInt32(out var value)
                 ? value
                 : 0;
         }

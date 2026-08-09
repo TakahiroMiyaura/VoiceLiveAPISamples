@@ -43,7 +43,11 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Handlers
         /// <returns>A task that represents the asynchronous operation.</returns>
         public override async Task HandleAsync(JsonElement message)
         {
-            var json = message.Deserialize<ResponseInfo>() ??
+            // The response payload (id, status, status_details, usage, ...) is nested under "response"; the
+            // root only carries event_id/type. Deserializing the root would leave every property null — in
+            // particular Status, which is how a failed response reports why it produced no audio.
+            var payload = message.TryGetProperty("response", out var response) ? response : message;
+            var json = payload.Deserialize<ResponseInfo>() ??
                        throw new InvalidOperationException("Deserialization failed for ResponseInfo.");
             OnProcessMessage?.Invoke(json);
             await Task.CompletedTask;

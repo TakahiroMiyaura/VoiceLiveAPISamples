@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 using NAudio.Wave;
 using SIPSorceryMedia.Abstractions;
 
-namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
+namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars.Streaming
 {
     /// <summary>
     ///     Avatar video streamer with RTP timestamp-based synchronization.
@@ -22,7 +22,6 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
         #region Constructors
 
         /// <summary>
-        ///     jj
         ///     Initializes a new instance of the AvatarVideoStreamer class.
         /// </summary>
         /// <param name="avatarClient">Avatar client instance.</param>
@@ -103,7 +102,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                     if (e.Exception != null)
                     {
                         logger?.LogError(e.Exception,
-                            "[AvatarVideoStreamer] ⚠️ WaveOut playback stopped with exception (stop #{count}, {ms:F0}ms since last frame)",
+                            "[AvatarVideoStreamer] WaveOut playback stopped with exception (stop #{count}, {ms:F0}ms since last frame)",
                             totalPlaybackStops, timeSinceLastFrame);
                     }
                     else
@@ -113,7 +112,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                               (waveProvider.WaveFormat.SampleRate * waveProvider.WaveFormat.Channels * 2)
                             : 0;
                         logger?.LogWarning(
-                            "[AvatarVideoStreamer] ⚠️ WaveOut playback stopped (stop #{count}, buffered: {ms:F0}ms, {time:F0}ms since last frame)",
+                            "[AvatarVideoStreamer] WaveOut playback stopped (stop #{count}, buffered: {ms:F0}ms, {time:F0}ms since last frame)",
                             totalPlaybackStops, bufferedMs, timeSinceLastFrame);
 
                         // Auto-restart if streaming is still active and we have buffered audio
@@ -122,19 +121,19 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                             try
                             {
                                 logger?.LogTrace(
-                                    "[AvatarVideoStreamer] 🔄 Auto-restarting WaveOut playback ({ms:F0}ms buffered)",
+                                    "[AvatarVideoStreamer] Auto-restarting WaveOut playback ({ms:F0}ms buffered)",
                                     bufferedMs);
                                 waveOut?.Play();
                             }
                             catch (Exception restartEx)
                             {
-                                logger?.LogError(restartEx, "[AvatarVideoStreamer] ❌ Failed to auto-restart WaveOut");
+                                logger?.LogError(restartEx, "[AvatarVideoStreamer] Failed to auto-restart WaveOut");
                             }
                         }
                         else
                         {
                             logger?.LogWarning(
-                                "[AvatarVideoStreamer] ❌ Cannot restart: isStreaming={streaming}, bufferedBytes={bytes}",
+                                "[AvatarVideoStreamer] Cannot restart: isStreaming={streaming}, bufferedBytes={bytes}",
                                 isStreaming, waveProvider?.BufferedBytes ?? 0);
                         }
                     }
@@ -144,10 +143,6 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                 logger?.LogTrace(
                     "[AvatarVideoStreamer] WaveOut initialized: {rate}Hz, {channels}ch (available as fallback)",
                     avatarSampleRate, channels);
-
-                if (useFFplayAudio)
-                {
-                }
             }
             catch (Exception ex)
             {
@@ -161,9 +156,9 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
             // Subscribe to avatar client events (always do this, even if WaveOut init failed)
             logger?.LogTrace("[AvatarVideoStreamer] Registering event handlers...");
             avatarClient.OnVideoFrameReceived += OnVideoFrame;
-            logger?.LogTrace("[AvatarVideoStreamer] ✓ Video frame event handler registered");
+            logger?.LogTrace("[AvatarVideoStreamer] Video frame event handler registered");
             avatarClient.OnAudioFrameReceived += OnAudioFrame;
-            logger?.LogTrace("[AvatarVideoStreamer] ✓ Audio frame event handler registered");
+            logger?.LogTrace("[AvatarVideoStreamer] Audio frame event handler registered");
 
             logger?.LogTrace("[AvatarVideoStreamer] Constructor completed successfully. All components initialized.");
         }
@@ -233,11 +228,6 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
         ///     Set to false for debugging or if sync causes issues.
         /// </summary>
         private readonly bool enableTimestampSync = false; // Disabled: use immediate playback with synchronized start
-
-        /// <summary>
-        ///     Use FFplay for audio instead of WaveOut (eliminates WaveOut buffering).
-        /// </summary>
-        private readonly bool useFFplayAudio = true; // Enabled: use FFplay for low-latency audio
 
         /// <summary>
         ///     FFmpeg process for video file writing.
@@ -327,8 +317,8 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
         /// <summary>
         ///     Minimum buffered frames before starting playback.
         ///     AUDIO QUALITY FIX: Increased from 2 to 10 frames for stability.
-        ///     10 frames ≈ 200ms provides smooth playback start without dropouts.
-        ///     200ms latency is imperceptible in conversation (&lt;250ms feels natural).
+        ///     10 frames = 200ms provides smooth playback start without dropouts.
+        ///     200ms latency is imperceptible in conversation (less than 250ms feels natural).
         /// </summary>
         private const int MinBufferedFrames = 10;
 
@@ -576,7 +566,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                 logger?.LogTrace("[AvatarVideoStreamer] Video queue remaining: {count}", videoFrameQueue.Count);
                 logger?.LogTrace("[AvatarVideoStreamer] Audio queue remaining: {count}", audioFrameQueue.Count);
                 logger?.LogTrace(
-                    "[AvatarVideoStreamer] 📊 Statistics: Audio frames: {audio}, Decode errors: {errors}, Playback stops: {stops}",
+                    "[AvatarVideoStreamer] Statistics: Audio frames: {audio}, Decode errors: {errors}, Playback stops: {stops}",
                     audioFrameCount, totalDecodeErrors, totalPlaybackStops);
             }
             catch (Exception ex)
@@ -878,7 +868,7 @@ a=fmtp:96 packetization-mode=1";
                 {
                     initialBufferingComplete = true;
                     logger?.LogTrace(
-                        "[AvatarVideoStreamer] ⏰ Initial buffering complete ({ms:F0}ms), starting synchronized playback",
+                        "[AvatarVideoStreamer] Initial buffering complete ({ms:F0}ms), starting synchronized playback",
                         initialBufferingDuration.TotalMilliseconds);
                     logger?.LogTrace("[AvatarVideoStreamer] Video queue: {video} frames, Audio queue: {audio} frames",
                         videoFrameQueue.Count, audioFrameQueue.Count);
@@ -959,7 +949,7 @@ a=fmtp:96 packetization-mode=1";
             if ((videoFramesProcessed > 0 || audioFramesProcessed > 0) && audioFrameCount % 10 == 0)
             {
                 logger?.LogTrace(
-                    "[AvatarVideoStreamer] ⏱️ Sync @ {time:F3}s: Processed {video}v/{audio}a frames, Queued: {vq}v/{aq}a",
+                    "[AvatarVideoStreamer] Sync @ {time:F3}s: Processed {video}v/{audio}a frames, Queued: {vq}v/{aq}a",
                     currentPlaybackTime, videoFramesProcessed, audioFramesProcessed,
                     videoFrameQueue.Count, audioFrameQueue.Count);
             }
@@ -968,7 +958,7 @@ a=fmtp:96 packetization-mode=1";
             if (audioFrameQueue.Count > 50 && audioFramesProcessed == 0 && initialBufferingComplete)
             {
                 logger?.LogWarning(
-                    "[AvatarVideoStreamer] ⚠️ Audio queue growing ({count} frames) but no frames processed! Current time: {time:F3}s, First timestamp: {ts}",
+                    "[AvatarVideoStreamer] Audio queue growing ({count} frames) but no frames processed! Current time: {time:F3}s, First timestamp: {ts}",
                     audioFrameQueue.Count, currentPlaybackTime, firstAudioTimestamp);
 
                 // Log next frame info for debugging
@@ -1054,7 +1044,7 @@ a=fmtp:96 packetization-mode=1";
                     {
                         firstIdrFrameReceived = true;
                         logger?.LogTrace(
-                            "[AvatarVideoStreamer] ✅ First IDR frame with SPS/PPS received - starting video encoding");
+                            "[AvatarVideoStreamer] First IDR frame with SPS/PPS received - starting video encoding");
                     }
                     else
                     {
@@ -1062,7 +1052,7 @@ a=fmtp:96 packetization-mode=1";
                         if (videoFramesWrittenToFFmpeg == 0)
                         {
                             logger?.LogWarning(
-                                "[AvatarVideoStreamer] ⏭️ Skipping non-IDR frame (waiting for SPS/PPS), SPS={sps}, PPS={pps}, IDR={idr}",
+                                "[AvatarVideoStreamer] Skipping non-IDR frame (waiting for SPS/PPS), SPS={sps}, PPS={pps}, IDR={idr}",
                                 hasSPS, hasPPS, hasIDR);
                         }
 
@@ -1144,7 +1134,7 @@ a=fmtp:96 packetization-mode=1";
                 if (!sessionStartTime.HasValue)
                 {
                     sessionStartTime = DateTime.Now;
-                    logger?.LogTrace("[AvatarVideoStreamer] ⏰ Session start time set (first video frame received)");
+                    logger?.LogTrace("[AvatarVideoStreamer] Session start time set (first video frame received)");
                 }
 
                 if (videoFrameCount % 30 == 1)
@@ -1221,7 +1211,6 @@ a=fmtp:96 packetization-mode=1";
                         const int maxFrameSize = 5760; // 60ms at 48kHz stereo (2880 * 2)
                         short[] pcmBuffer = new short[maxFrameSize];
 
-                        // 修正後:
                         int decodedSamples = opusDecoder.Decode(audioData, pcmBuffer, maxFrameSize / 2);
 
                         if (decodedSamples > 0)
@@ -1251,7 +1240,7 @@ a=fmtp:96 packetization-mode=1";
                                 {
                                     sessionStartTime = DateTime.Now;
                                     logger?.LogTrace(
-                                        "[AvatarVideoStreamer] ⏰ Session start time set (first audio frame received)");
+                                        "[AvatarVideoStreamer] Session start time set (first audio frame received)");
                                 }
 
                                 // Log audio progress with level
@@ -1259,7 +1248,7 @@ a=fmtp:96 packetization-mode=1";
                                 {
                                     double relativeTime = (timestamp - firstAudioTimestamp.Value) / AudioClockRate;
                                     logger?.LogTrace(
-                                        "[AvatarVideoStreamer] Audio frame #{count} queued: {samples} samples → {bytes} bytes PCM, queue: {queue}, Level: {db:F1}dB",
+                                        "[AvatarVideoStreamer] Audio frame #{count} queued: {samples} samples -> {bytes} bytes PCM, queue: {queue}, Level: {db:F1}dB",
                                         audioFrameCount, decodedSamples, pcmBytes.Length, audioFrameQueue.Count,
                                         dbLevel);
                                 }
@@ -1276,7 +1265,7 @@ a=fmtp:96 packetization-mode=1";
                                         if (audioFrameCount == 1)
                                         {
                                             logger?.LogTrace(
-                                                "[AvatarVideoStreamer] First audio frame sent to FFmpeg pipe: {samples} samples → {bytes} bytes PCM",
+                                                "[AvatarVideoStreamer] First audio frame sent to FFmpeg pipe: {samples} samples -> {bytes} bytes PCM",
                                                 decodedSamples, pcmBytes.Length);
                                         }
                                     }
@@ -1330,7 +1319,7 @@ a=fmtp:96 packetization-mode=1";
                             if (dbLevel < -60 && audioFrameCount % 50 == 1)
                             {
                                 logger?.LogWarning(
-                                    "[AvatarVideoStreamer] ⚠️ Audio frame #{count} is very quiet ({db:F1}dB) - possible silence",
+                                    "[AvatarVideoStreamer] Audio frame #{count} is very quiet ({db:F1}dB) - possible silence",
                                     audioFrameCount, dbLevel);
                             }
                         }
@@ -1347,7 +1336,7 @@ a=fmtp:96 packetization-mode=1";
                         totalDecodeErrors++;
                         // Log all decode errors for debugging audio cutoff issues
                         logger?.LogWarning(decodeEx,
-                            "[AvatarVideoStreamer] ❌ Error decoding Opus frame #{count} (input: {bytes} bytes, total errors: {errors}): {message}",
+                            "[AvatarVideoStreamer] Error decoding Opus frame #{count} (input: {bytes} bytes, total errors: {errors}): {message}",
                             audioFrameCount, audioData.Length, totalDecodeErrors, decodeEx.Message);
                     }
                 }

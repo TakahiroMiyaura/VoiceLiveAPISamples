@@ -3,7 +3,7 @@
 // https://opensource.org/license/bsl-1-0
 
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars.Streaming;
 using Microsoft.Extensions.Logging;
 
 namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
@@ -57,7 +57,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         /// </summary>
         public void Initialize()
         {
-            avatarClient = new AvatarClient();
+            avatarClient = new AvatarClient(logger);
             logger.LogInformation("Avatar client initialized for WebRTC streaming");
         }
 
@@ -66,7 +66,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         /// </summary>
         /// <param name="iceServers">The ICE server information from session.updated.</param>
         /// <returns>A Base64-encoded SDP offer string.</returns>
-        public async Task<string> CreateSdpOfferAsync(IceServers iceServers)
+        public async Task<string> CreateSdpOfferAsync(AvatarIceServer iceServers)
         {
             if (avatarClient == null)
             {

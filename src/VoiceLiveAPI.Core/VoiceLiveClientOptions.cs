@@ -3,6 +3,7 @@
 // https://opensource.org/license/bsl-1-0
 
 using System;
+using System.Collections.Generic;
 
 namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
 {
@@ -20,7 +21,13 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         /// <summary>
         ///     The default API version used when not specified.
         /// </summary>
-        public const string DefaultApiVersion = "2025-05-01-preview";
+        /// <remarks>
+        ///     Set to <c>2026-01-01-preview</c> to match the self-hosted MCP support (the MCP tool
+        ///     configuration requires API version 2025-10-01 or later). The previous default
+        ///     (<c>2025-05-01-preview</c>) predated that requirement and was inconsistent with the
+        ///     built-in MCP feature.
+        /// </remarks>
+        public const string DefaultApiVersion = "2026-01-01-preview";
 
         #endregion
 
@@ -57,6 +64,14 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         ///     <c>true</c> to enable diagnostics; otherwise, <c>false</c>. Defaults to <c>false</c>.
         /// </value>
         public bool EnableDiagnostics { get; set; } = false;
+
+        /// <summary>
+        ///     Gets or sets preview feature flags appended to the realtime WebSocket URL as
+        ///     <c>&amp;features=name:value,name:value</c>. Used to opt into gated preview capabilities such as
+        ///     <c>client_ec_reference:true</c> (client-side echo cancellation reference). Empty or null adds
+        ///     nothing.
+        /// </summary>
+        public IReadOnlyList<string> Features { get; set; } = null;
 
         #endregion
     }

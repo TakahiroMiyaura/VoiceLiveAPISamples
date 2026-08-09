@@ -57,7 +57,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts
         ///     Gets or sets the tools available for the client session.
         /// </summary>
         [JsonPropertyName("tools")]
-        public Function[] Tools { get; set; } = null;
+        public ToolDefinition[] Tools { get; set; } = null;
 
         /// <summary>
         ///     Gets or sets the tool choice for the client session.

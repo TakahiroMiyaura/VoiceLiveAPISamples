@@ -120,6 +120,101 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         }
 
         /// <summary>
+        ///     Event fired when a video delta response is received (WebSocket avatar video frames,
+        ///     <c>response.video.delta</c>). Available when the avatar uses <c>output_protocol=websocket</c>.
+        /// </summary>
+        public event Action<VideoDelta> OnVideoDeltaReceived
+        {
+            add
+            {
+                if (TryGetValue(ResponseVideoDeltaHandler.EventType, out var handler))
+                {
+                    ((ResponseVideoDeltaHandler)handler).OnProcessMessage += value;
+                }
+                else
+                {
+                    var h = new ResponseVideoDeltaHandler();
+                    h.OnProcessMessage += value;
+                    RegisterMessageHandler(h);
+                }
+            }
+            remove
+            {
+                if (TryGetValue(ResponseVideoDeltaHandler.EventType, out var handler))
+                {
+                    ((ResponseVideoDeltaHandler)handler).OnProcessMessage -= value;
+                }
+                else
+                {
+                    throw new InvalidOperationException("Handler not registered for ResponseVideoDeltaHandler.");
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Event fired when a WebRTC voice-session SDP answer is received (<c>rtc.call.sdp.created</c>).
+        ///     Apply the answer as the peer's remote description to complete negotiation.
+        /// </summary>
+        public event Action<RtcCallSdpCreated> OnRtcCallSdpCreatedReceived
+        {
+            add
+            {
+                if (TryGetValue(RtcCallSdpCreatedHandler.EventType, out var handler))
+                {
+                    ((RtcCallSdpCreatedHandler)handler).OnProcessMessage += value;
+                }
+                else
+                {
+                    var h = new RtcCallSdpCreatedHandler();
+                    h.OnProcessMessage += value;
+                    RegisterMessageHandler(h);
+                }
+            }
+            remove
+            {
+                if (TryGetValue(RtcCallSdpCreatedHandler.EventType, out var handler))
+                {
+                    ((RtcCallSdpCreatedHandler)handler).OnProcessMessage -= value;
+                }
+                else
+                {
+                    throw new InvalidOperationException("Handler not registered for RtcCallSdpCreatedHandler.");
+                }
+            }
+        }
+
+        /// <summary>
+        ///     Event fired when a WebRTC voice-session operation error is received (<c>rtc.call.error</c>).
+        /// </summary>
+        public event Action<RtcCallError> OnRtcCallErrorReceived
+        {
+            add
+            {
+                if (TryGetValue(RtcCallErrorHandler.EventType, out var handler))
+                {
+                    ((RtcCallErrorHandler)handler).OnProcessMessage += value;
+                }
+                else
+                {
+                    var h = new RtcCallErrorHandler();
+                    h.OnProcessMessage += value;
+                    RegisterMessageHandler(h);
+                }
+            }
+            remove
+            {
+                if (TryGetValue(RtcCallErrorHandler.EventType, out var handler))
+                {
+                    ((RtcCallErrorHandler)handler).OnProcessMessage -= value;
+                }
+                else
+                {
+                    throw new InvalidOperationException("Handler not registered for RtcCallErrorHandler.");
+                }
+            }
+        }
+
+        /// <summary>
         ///     Event fired when a transcription is received.
         /// </summary>
         public event Action<TranscriptionResult> OnTranscriptionReceived
@@ -1094,6 +1189,167 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
                 {
                     throw new InvalidOperationException("Handler not registered for SessionCreatedHandler.");
                 }
+            }
+        }
+
+        /// <summary>
+        ///     Event fired when MCP list tools starts.
+        /// </summary>
+        public event Action<McpListToolsInProgress> OnMcpListToolsInProgressReceived
+        {
+            add => SubscribeGenericHandler(McpListToolsInProgress.TypeName, value);
+            remove => UnsubscribeGenericHandler<McpListToolsInProgress>(McpListToolsInProgress.TypeName, value);
+        }
+
+        /// <summary>
+        ///     Event fired when MCP list tools completes.
+        /// </summary>
+        public event Action<McpListToolsCompleted> OnMcpListToolsCompletedReceived
+        {
+            add => SubscribeGenericHandler(McpListToolsCompleted.TypeName, value);
+            remove => UnsubscribeGenericHandler<McpListToolsCompleted>(McpListToolsCompleted.TypeName, value);
+        }
+
+        /// <summary>
+        ///     Event fired when MCP list tools fails.
+        /// </summary>
+        public event Action<McpListToolsFailed> OnMcpListToolsFailedReceived
+        {
+            add => SubscribeGenericHandler(McpListToolsFailed.TypeName, value);
+            remove => UnsubscribeGenericHandler<McpListToolsFailed>(McpListToolsFailed.TypeName, value);
+        }
+
+        /// <summary>
+        ///     Event fired when MCP call arguments delta is received.
+        /// </summary>
+        public event Action<McpCallArgumentsDelta> OnMcpCallArgumentsDeltaReceived
+        {
+            add => SubscribeGenericHandler(McpCallArgumentsDelta.TypeName, value);
+            remove => UnsubscribeGenericHandler<McpCallArgumentsDelta>(McpCallArgumentsDelta.TypeName, value);
+        }
+
+        /// <summary>
+        ///     Event fired when MCP call arguments are complete.
+        /// </summary>
+        public event Action<McpCallArgumentsDone> OnMcpCallArgumentsDoneReceived
+        {
+            add => SubscribeGenericHandler(McpCallArgumentsDone.TypeName, value);
+            remove => UnsubscribeGenericHandler<McpCallArgumentsDone>(McpCallArgumentsDone.TypeName, value);
+        }
+
+        /// <summary>
+        ///     Event fired when an MCP call starts processing.
+        /// </summary>
+        public event Action<McpCallInProgress> OnMcpCallInProgressReceived
+        {
+            add => SubscribeGenericHandler(McpCallInProgress.TypeName, value);
+            remove => UnsubscribeGenericHandler<McpCallInProgress>(McpCallInProgress.TypeName, value);
+        }
+
+        /// <summary>
+        ///     Event fired when an MCP call completes successfully.
+        /// </summary>
+        public event Action<McpCallCompleted> OnMcpCallCompletedReceived
+        {
+            add => SubscribeGenericHandler(McpCallCompleted.TypeName, value);
+            remove => UnsubscribeGenericHandler<McpCallCompleted>(McpCallCompleted.TypeName, value);
+        }
+
+        /// <summary>
+        ///     Event fired when an MCP call fails.
+        /// </summary>
+        public event Action<McpCallFailed> OnMcpCallFailedReceived
+        {
+            add => SubscribeGenericHandler(McpCallFailed.TypeName, value);
+            remove => UnsubscribeGenericHandler<McpCallFailed>(McpCallFailed.TypeName, value);
+        }
+
+        /// <summary>
+        ///     Event fired when hosted Foundry agent tool-call arguments are streamed.
+        /// </summary>
+        public event Action<FoundryAgentCallArgumentsDelta> OnFoundryAgentCallArgumentsDeltaReceived
+        {
+            add => SubscribeGenericHandler(FoundryAgentCallArgumentsDelta.TypeName, value);
+            remove => UnsubscribeGenericHandler<FoundryAgentCallArgumentsDelta>(FoundryAgentCallArgumentsDelta.TypeName, value);
+        }
+
+        /// <summary>
+        ///     Event fired when hosted Foundry agent tool-call arguments are complete.
+        /// </summary>
+        public event Action<FoundryAgentCallArgumentsDone> OnFoundryAgentCallArgumentsDoneReceived
+        {
+            add => SubscribeGenericHandler(FoundryAgentCallArgumentsDone.TypeName, value);
+            remove => UnsubscribeGenericHandler<FoundryAgentCallArgumentsDone>(FoundryAgentCallArgumentsDone.TypeName, value);
+        }
+
+        /// <summary>
+        ///     Event fired when a hosted Foundry agent call starts processing.
+        /// </summary>
+        public event Action<FoundryAgentCallInProgress> OnFoundryAgentCallInProgressReceived
+        {
+            add => SubscribeGenericHandler(FoundryAgentCallInProgress.TypeName, value);
+            remove => UnsubscribeGenericHandler<FoundryAgentCallInProgress>(FoundryAgentCallInProgress.TypeName, value);
+        }
+
+        /// <summary>
+        ///     Event fired when a hosted Foundry agent call completes successfully.
+        /// </summary>
+        public event Action<FoundryAgentCallCompleted> OnFoundryAgentCallCompletedReceived
+        {
+            add => SubscribeGenericHandler(FoundryAgentCallCompleted.TypeName, value);
+            remove => UnsubscribeGenericHandler<FoundryAgentCallCompleted>(FoundryAgentCallCompleted.TypeName, value);
+        }
+
+        /// <summary>
+        ///     Event fired when a hosted Foundry agent call fails.
+        /// </summary>
+        public event Action<FoundryAgentCallFailed> OnFoundryAgentCallFailedReceived
+        {
+            add => SubscribeGenericHandler(FoundryAgentCallFailed.TypeName, value);
+            remove => UnsubscribeGenericHandler<FoundryAgentCallFailed>(FoundryAgentCallFailed.TypeName, value);
+        }
+
+        #endregion
+
+        #region Private Methods
+
+        /// <summary>
+        ///     Subscribes a handler using <see cref="GenericServerEventHandler{T}" />.
+        /// </summary>
+        /// <typeparam name="T">The server event model type.</typeparam>
+        /// <param name="eventType">The event type string.</param>
+        /// <param name="value">The event handler delegate.</param>
+        private void SubscribeGenericHandler<T>(string eventType, Action<T> value)
+            where T : Events.ServerEvent
+        {
+            if (TryGetValue(eventType, out var handler))
+            {
+                ((GenericServerEventHandler<T>)handler).OnProcessMessage += value;
+            }
+            else
+            {
+                var h = new GenericServerEventHandler<T>(eventType);
+                h.OnProcessMessage += value;
+                RegisterMessageHandler(h);
+            }
+        }
+
+        /// <summary>
+        ///     Unsubscribes a handler using <see cref="GenericServerEventHandler{T}" />.
+        /// </summary>
+        /// <typeparam name="T">The server event model type.</typeparam>
+        /// <param name="eventType">The event type string.</param>
+        /// <param name="value">The event handler delegate.</param>
+        private void UnsubscribeGenericHandler<T>(string eventType, Action<T> value)
+            where T : Events.ServerEvent
+        {
+            if (TryGetValue(eventType, out var handler))
+            {
+                ((GenericServerEventHandler<T>)handler).OnProcessMessage -= value;
+            }
+            else
+            {
+                throw new InvalidOperationException($"Handler not registered for {eventType}.");
             }
         }
 

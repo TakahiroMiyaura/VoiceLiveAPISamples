@@ -3,6 +3,7 @@
 // https://opensource.org/license/bsl-1-0
 
 using System;
+using System.Linq;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -61,9 +62,21 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         public string AgentProjectName { get; set; }
 
         /// <summary>
-        ///     Gets or sets the AI Agent ID for agent mode.
+        ///     Gets or sets the AI Agent ID for agent mode (classic connection, deprecated 2026-08-31).
         /// </summary>
         public string AgentId { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the AI Agent name for the new agent connection method (<c>agent-name</c>).
+        ///     The new method replaces the classic <see cref="AgentId" /> connection.
+        /// </summary>
+        public string AgentName { get; set; }
+
+        /// <summary>
+        ///     Gets or sets the optional AI Agent version pin for the new agent connection method
+        ///     (<c>agent-version</c>). When null the latest version is used.
+        /// </summary>
+        public string AgentVersion { get; set; }
 
         /// <summary>
         ///     Gets or sets the AI Agent access token for agent mode.
@@ -337,6 +350,108 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
             return session;
         }
 
+        /// <summary>
+        ///     Starts a new VoiceLive session using the new agent connection method (<c>agent-name</c>),
+        ///     which replaces the classic <c>agent-id</c> connection (deprecated 2026-08-31). Requires
+        ///     Entra ID authentication.
+        /// </summary>
+        /// <param name="projectName">The AI Agent project name.</param>
+        /// <param name="agentName">The AI Agent name.</param>
+        /// <param name="sessionOptions">Optional session configuration options.</param>
+        /// <param name="agentVersion">Optional agent version pin (<c>agent-version</c>).</param>
+        /// <param name="messageHandlers">Message handler managers to register before connecting.</param>
+        /// <param name="cancellationToken">A cancellation token.</param>
+        /// <returns>A task that returns the created <see cref="VoiceLiveSession" />.</returns>
+        public async Task<VoiceLiveSession> StartAgentSessionByNameAsync(string projectName, string agentName,
+            VoiceLiveSessionOptions sessionOptions = null, string agentVersion = null,
+            Commons.MessageHandlerManagerBase[] messageHandlers = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrEmpty(projectName))
+            {
+                throw new ArgumentNullException(nameof(projectName));
+            }
+
+            if (string.IsNullOrEmpty(agentName))
+            {
+                throw new ArgumentNullException(nameof(agentName));
+            }
+
+            AgentProjectName = projectName;
+            AgentName = agentName;
+            AgentVersion = agentVersion;
+
+            var options = sessionOptions ?? VoiceLiveSessionOptions.CreateDefault();
+            var uri = BuildAgentByNameConnectionUri();
+            var session = new VoiceLiveSession(uri, options);
+
+            session.Logger = Logger;
+
+            if (messageHandlers != null)
+            {
+                foreach (var handler in messageHandlers)
+                {
+                    session.AddMessageHandlerManager(handler);
+                }
+            }
+
+            Logger?.LogInformation("Starting agent session (agent-name) - Project: {project}, Agent: {agent}",
+                projectName, agentName);
+
+            await session.ConnectAsync(SetupAuthenticationAsync, cancellationToken).ConfigureAwait(false);
+
+            return session;
+        }
+
+        /// <summary>
+        ///     Starts a WebRTC voice session by opening the control WebSocket to the
+        ///     <c>/voice-live/realtime/calls</c> endpoint. The caller then negotiates the peer connection by
+        ///     sending <see cref="Commands.Messages.RtcCallSdpCreate" /> and awaiting
+        ///     <see cref="Models.RtcCallSdpCreated" /> / <see cref="Models.RtcCallError" /> on this session.
+        /// </summary>
+        /// <remarks>
+        ///     Audio flows over WebRTC RTP media tracks (not <c>input_audio_buffer.append</c> /
+        ///     <c>response.audio.delta</c>); this method only establishes the control channel. The WebRTC peer
+        ///     and audio I/O are provided by a platform-specific layer. Available in API version
+        ///     2026-01-01-preview and later.
+        /// </remarks>
+        /// <param name="sessionOptions">The session configuration options.</param>
+        /// <param name="messageHandlers">Message handler managers to register before connecting.</param>
+        /// <param name="cancellationToken">A cancellation token.</param>
+        /// <returns>A task that returns the created <see cref="VoiceLiveSession" />.</returns>
+        public async Task<VoiceLiveSession> StartCallSessionAsync(VoiceLiveSessionOptions sessionOptions,
+            Commons.MessageHandlerManagerBase[] messageHandlers = null,
+            CancellationToken cancellationToken = default, string apiKeyForQuery = null)
+        {
+            if (sessionOptions == null)
+            {
+                throw new ArgumentNullException(nameof(sessionOptions));
+            }
+
+            var uri = BuildCallsConnectionUri(sessionOptions.Model, apiKeyForQuery);
+            var session = new VoiceLiveSession(uri, sessionOptions);
+
+            session.Logger = Logger;
+
+            if (messageHandlers != null)
+            {
+                foreach (var handler in messageHandlers)
+                {
+                    session.AddMessageHandlerManager(handler);
+                }
+            }
+
+            Logger?.LogInformation("Starting WebRTC voice session (/calls) with model: {model}",
+                sessionOptions.Model);
+
+            // The /calls endpoint rejects an up-front session.update; the session config is sent inside the
+            // rtc.call.sdp.create SDP exchange instead. Connect without the initial session.update.
+            await session.ConnectAsync(SetupAuthenticationAsync, cancellationToken, sendInitialSessionUpdate: false)
+                .ConfigureAwait(false);
+
+            return session;
+        }
+
         #endregion
 
         #region Private Methods
@@ -345,6 +460,34 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         {
             var baseUri = endpoint.TrimEnd('/').Replace("https://", "wss://").Replace("http://", "ws://");
             var uri = $"{baseUri}/voice-live/realtime?api-version={options.ApiVersion}&model={model}";
+            uri += BuildFeaturesQuery();
+            return new Uri(uri);
+        }
+
+        private string BuildFeaturesQuery()
+        {
+            if (options.Features == null)
+            {
+                return string.Empty;
+            }
+
+            var features = string.Join(",", options.Features.Where(f => !string.IsNullOrWhiteSpace(f)));
+            return string.IsNullOrEmpty(features) ? string.Empty : $"&features={features}";
+        }
+
+        private Uri BuildCallsConnectionUri(string model, string apiKeyForQuery = null)
+        {
+            var baseUri = endpoint.TrimEnd('/').Replace("https://", "wss://").Replace("http://", "ws://");
+            var uri = $"{baseUri}/voice-live/realtime/calls?api-version={options.ApiVersion}&model={model}";
+
+            // The WebRTC /calls endpoint takes the API key as a query parameter (as the official browser
+            // sample does). The service uses it to allocate the downstream media client; a header-only key or
+            // bearer token authenticates the WebSocket handshake but fails allocation.
+            if (!string.IsNullOrEmpty(apiKeyForQuery))
+            {
+                uri += $"&api-key={Uri.EscapeDataString(apiKeyForQuery)}";
+            }
+
             return new Uri(uri);
         }
 
@@ -353,6 +496,19 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
             var baseUri = endpoint.TrimEnd('/').Replace("https://", "wss://").Replace("http://", "ws://");
             var uri =
                 $"{baseUri}/voice-live/realtime?api-version={options.ApiVersion}&agent-project-name={AgentProjectName}&agent-id={AgentId}";
+            return new Uri(uri);
+        }
+
+        private Uri BuildAgentByNameConnectionUri()
+        {
+            var baseUri = endpoint.TrimEnd('/').Replace("https://", "wss://").Replace("http://", "ws://");
+            var uri =
+                $"{baseUri}/voice-live/realtime?api-version={options.ApiVersion}&agent-project-name={AgentProjectName}&agent-name={AgentName}";
+            if (!string.IsNullOrEmpty(AgentVersion))
+            {
+                uri += $"&agent-version={AgentVersion}";
+            }
+
             return new Uri(uri);
         }
 

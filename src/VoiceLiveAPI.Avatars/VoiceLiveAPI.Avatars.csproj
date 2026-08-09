@@ -46,11 +46,7 @@
 	  <PackageReference Include="SIPSorcery" Version="8.0.23" />
 	  <PackageReference Include="SIPSorceryMedia.Abstractions" Version="8.0.12" />
 	  <PackageReference Include="SIPSorceryMedia.Encoders" Version="8.0.7" />
-	  <PackageReference Include="System.Text.Json" Version="9.0.8" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\VoiceLiveAPI.Core\VoiceLiveAPI.Core.csproj" />
+	  <PackageReference Include="System.Text.Json" Version="10.0.3" />
   </ItemGroup>
 
 </Project>

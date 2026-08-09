@@ -3,8 +3,9 @@
 // https://opensource.org/license/bsl-1-0
 
 using System.Text;
+using System.Text.Json;
 using Azure.AI.VoiceLive;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages.Parts;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars;
 using Microsoft.Extensions.Logging;
 
 namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
@@ -67,34 +68,21 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         #region Public Methods
 
         /// <summary>
-        ///     Starts a new VoiceLive session with the specified model and options.
+        ///     Starts a new VoiceLive session for the specified target (an AI model or a Foundry agent).
         /// </summary>
-        /// <param name="model">The AI model name.</param>
+        /// <param name="target">The session target: a model name or an agent configuration.</param>
         /// <param name="sessionOptions">The session options.</param>
-        /// <param name="agentProjectName">The agent project name (for Agent/Avatar mode).</param>
-        /// <param name="agentId">The agent ID (for Agent/Avatar mode).</param>
         /// <param name="cancellationToken">A cancellation token.</param>
         public async Task StartAsync(
-            string model,
+            SessionTarget target,
             VoiceLiveSessionOptions sessionOptions,
-            string? agentProjectName = null,
-            string? agentId = null,
             CancellationToken cancellationToken = default)
         {
             logger.LogInformation("Starting VoiceLive SDK session in {mode} mode...", mode);
 
-            // Start session based on mode
-            if (mode == ConnectionMode.AIModel)
-            {
-                session = await client.StartSessionAsync(model, cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                // AI Agent and Avatar modes use agent session
-                // Note: The SDK may provide a specific agent session method.
-                // For now, use StartSessionAsync and include agent info in session options.
-                session = await client.StartSessionAsync(model, cancellationToken).ConfigureAwait(false);
-            }
+            // AI Model uses a model session; AI Agent / Avatar use a Foundry agent session
+            // (AgentSessionConfig). SessionTarget unifies both via the SDK's StartSessionAsync overload.
+            session = await client.StartSessionAsync(target, cancellationToken).ConfigureAwait(false);
 
             logger.LogInformation("VoiceLive SDK session started");
 
@@ -137,6 +125,62 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         {
             if (session == null) return;
             await session.StartResponseAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        ///     Sends an image as a user message and requests a response. The image is added via a raw
+        ///     <c>conversation.item.create</c> event with an <c>input_image</c> content part (the
+        ///     strongly-typed <see cref="UserMessageItem" /> does not expose image content in the
+        ///     current SDK). The model must be vision-capable; in Avatar mode the spoken description is
+        ///     rendered by the avatar. The image field name is <c>image_url</c> (required by the live service).
+        /// </summary>
+        /// <param name="imagePath">Path to a local image file (png/jpg/gif/webp).</param>
+        /// <param name="cancellationToken">A cancellation token.</param>
+        public async Task SendImageAsync(string imagePath, CancellationToken cancellationToken = default)
+        {
+            if (session == null)
+            {
+                logger.LogWarning("Cannot send image: session is not started.");
+                return;
+            }
+
+            // Pause microphone input so the server VAD does not race with (or already hold an active
+            // response for) the image turn — otherwise the service can reject the item and close.
+            if (audioHandler.IsRecording)
+            {
+                audioHandler.StopRecording();
+                logger.LogInformation("Recording paused for image input.");
+            }
+
+            byte[] bytes = File.ReadAllBytes(imagePath);
+            string mime = Path.GetExtension(imagePath).ToLowerInvariant() switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".gif" => "image/gif",
+                ".webp" => "image/webp",
+                _ => "image/png"
+            };
+            string dataUri = $"data:{mime};base64,{Convert.ToBase64String(bytes)}";
+
+            var itemCreate = new
+            {
+                type = "conversation.item.create",
+                item = new
+                {
+                    type = "message",
+                    role = "user",
+                    content = new object[]
+                    {
+                        new { type = "input_text", text = "この画像に何が写っているか説明してください。" },
+                        new { type = "input_image", image_url = dataUri }
+                    }
+                }
+            };
+
+            await session.SendCommandAsync(BinaryData.FromString(JsonSerializer.Serialize(itemCreate)), cancellationToken)
+                .ConfigureAwait(false);
+            await session.StartResponseAsync(cancellationToken).ConfigureAwait(false);
+            logger.LogInformation("Image sent ({bytes} bytes); response requested.", bytes.Length);
         }
 
         #endregion
@@ -267,7 +311,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 logger.LogInformation("Avatar mode: Checking for ICE servers in session update...");
 
                 // Extract ICE servers from SDK properties
-                IceServers? iceServers = ExtractIceServersFromUpdate(sessionUpdated);
+                AvatarIceServer? iceServers = ExtractIceServersFromUpdate(sessionUpdated);
 
                 if (iceServers == null)
                 {
@@ -292,7 +336,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
             audioHandler.StartRecording();
         }
 
-        private IceServers? ExtractIceServersFromUpdate(SessionUpdateSessionUpdated sessionUpdated)
+        private AvatarIceServer? ExtractIceServersFromUpdate(SessionUpdateSessionUpdated sessionUpdated)
         {
             try
             {
@@ -307,7 +351,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
 
                 logger.LogInformation("ICE servers found: {urls}", string.Join(", ", urls));
 
-                return new IceServers
+                return new AvatarIceServer
                 {
                     Urls = urls,
                     UserName = firstServer.Username,

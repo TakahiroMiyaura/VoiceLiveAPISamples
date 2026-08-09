@@ -146,6 +146,13 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Events
             Register("response.audio.delta", VoiceLiveModelFactory.AudioDeltaFromJson);
             Register("response.audio_transcript.delta", VoiceLiveModelFactory.TranscriptDeltaFromJson);
 
+            // Video events (WebSocket avatar frames; 2026-06-01-preview and later)
+            Register("response.video.delta", element => element.Deserialize<VideoDelta>());
+
+            // WebRTC voice-session signaling (control channel; 2026-01-01-preview and later)
+            Register("rtc.call.sdp.created", element => element.Deserialize<RtcCallSdpCreated>());
+            Register("rtc.call.error", element => element.Deserialize<RtcCallError>());
+
             // Speech events (factory methods available)
             Register("input_audio_buffer.speech_started", VoiceLiveModelFactory.SpeechStartedFromJson);
             Register("input_audio_buffer.speech_stopped", VoiceLiveModelFactory.SpeechStoppedFromJson);

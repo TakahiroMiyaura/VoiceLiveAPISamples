@@ -17,6 +17,7 @@ using System.Runtime.CompilerServices;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Commons.Messages;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Logs;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Models;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.SessionUpdates;
 using Microsoft.Extensions.Logging;
 
@@ -324,6 +325,32 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         }
 
         /// <summary>
+        ///     Sends an MCP approval response to approve or deny a pending MCP tool call.
+        /// </summary>
+        /// <param name="approvalRequestId">The approval request ID from the <c>mcp_approval_request</c> event.</param>
+        /// <param name="approve">Whether to approve the MCP tool execution.</param>
+        /// <param name="cancellationToken">A cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        public async Task SendMcpApprovalResponseAsync(string approvalRequestId, bool approve,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrEmpty(approvalRequestId))
+                throw new ArgumentNullException(nameof(approvalRequestId));
+
+            var message = new
+            {
+                type = Models.Commands.ItemCreate.TypeName,
+                item = new
+                {
+                    type = McpApprovalRequest.ResponseTypeName,
+                    approval_request_id = approvalRequestId,
+                    approve
+                }
+            };
+            await SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
         ///     Triggers response generation.
         /// </summary>
         /// <param name="cancellationToken">A cancellation token.</param>
@@ -475,7 +502,7 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
         /// <param name="cancellationToken">A cancellation token.</param>
         /// <returns>A task representing the asynchronous operation.</returns>
         internal async Task ConnectAsync(Func<ClientWebSocket, Task> setupAuthentication,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default, bool sendInitialSessionUpdate = true)
         {
             Logger?.LogInformation("ConnectAsync starting - Handlers registered: {count}", managers.Count);
 
@@ -484,15 +511,23 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
                 await setupAuthentication(webSocket).ConfigureAwait(false);
             }
 
-            Logger?.LogInformation("Connecting to: {uri}", ConnectionUri);
+            // Redact any api-key query parameter so the key is never written to logs.
+            var loggedUri = System.Text.RegularExpressions.Regex.Replace(
+                ConnectionUri.ToString(), @"api-key=[^&]*", "api-key=***");
+            Logger?.LogInformation("Connecting to: {uri}", loggedUri);
 
             await webSocket.ConnectAsync(ConnectionUri, cancellationToken).ConfigureAwait(false);
 
             Logger?.LogInformation("WebSocket connected, state: {state}", webSocket.State);
 
-            // Send session configuration
-            Logger?.LogInformation("Sending initial session.update...");
-            await ConfigureSessionAsync(Options, cancellationToken).ConfigureAwait(false);
+            // Send session configuration. The WebRTC /calls endpoint must NOT receive a session.update first
+            // (the session is created by the rtc.call.sdp.create SDP exchange, which carries the config in its
+            // own "session" field); sending session.update up front is rejected with "session_not_ready".
+            if (sendInitialSessionUpdate)
+            {
+                Logger?.LogInformation("Sending initial session.update...");
+                await ConfigureSessionAsync(Options, cancellationToken).ConfigureAwait(false);
+            }
 
             // Start receive loop
             Logger?.LogInformation("Starting receive and message handling loops...");
@@ -597,6 +632,14 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
                     else
                     {
                         Logger?.LogDebug("Processing message type: {type}", messageType);
+                    }
+
+                    // Wire-level diagnostics: log the full raw body for every message except the high-frequency
+                    // media deltas (audio/video/transcript). Visible at Debug (e.g. VOICELIVE_WIRE_DEBUG=1).
+                    if (messageType != "response.audio.delta" && messageType != "response.video.delta" &&
+                        messageType != "response.audio_transcript.delta")
+                    {
+                        Logger?.LogDebug("Raw message ({type}): {json}", messageType, json);
                     }
 
                     // Process with traditional handlers
@@ -756,12 +799,20 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Core
 
         private static string GetStringProperty(JsonElement element, string propertyName)
         {
-            return element.TryGetProperty(propertyName, out var prop) ? prop.GetString() : null;
+            // GetString throws on anything that isn't a string or null, and the service does send objects
+            // where a client might expect a scalar (voice, for example).
+            return element.TryGetProperty(propertyName, out var prop)
+                   && (prop.ValueKind == JsonValueKind.String || prop.ValueKind == JsonValueKind.Null)
+                ? prop.GetString()
+                : null;
         }
 
         private static int GetIntProperty(JsonElement element, string propertyName)
         {
-            return element.TryGetProperty(propertyName, out var prop) && prop.TryGetInt32(out var value)
+            // TryGetInt32 throws on a non-numeric element (including null), so gate on the value kind.
+            return element.TryGetProperty(propertyName, out var prop)
+                   && prop.ValueKind == JsonValueKind.Number
+                   && prop.TryGetInt32(out var value)
                 ? value
                 : 0;
         }

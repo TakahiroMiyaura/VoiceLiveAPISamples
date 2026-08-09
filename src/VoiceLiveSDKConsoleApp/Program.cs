@@ -6,7 +6,6 @@ using System.Text;
 using Azure;
 using Azure.AI.VoiceLive;
 using Azure.Identity;
-using Com.Reseul.Azure.AI.VoiceLiveAPI.Core.Logs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -42,9 +41,20 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         #region Static Fields and Constants
 
         private static ILogger? logger;
+        private static IDisposable? telemetryListener;
         private static string azureEndpoint = "<your Azure AI Services Endpoint>";
         private static string agentProjectName = "<your Azure AI Foundry Project Name>";
+        private static string agentName = "<your Azure AI Agent Name>";
         private static string agentId = "<your Azure AI Agent Id>";
+        private static string voiceName = "ja-JP-Nanami:DragonHDLatestNeural";
+        private static string modelName = "phi4-mm-realtime";
+        private static string avatarBackend = "agent";
+
+        /// <summary>OpenAI native voice names (used with GPT real-time models), e.g. "marin" / "cedar".</summary>
+        private static readonly HashSet<string> OpenAiVoiceNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse", "marin", "cedar"
+        };
         private static string azureIdentityTokenRequestUrl = "<Token request url(ex:https://ai.azure.com/.default)>";
         private static string apiKey = "<Azure AI Foundry API Key>";
         private static string agentAccessToken = "<Azure AI Foundry API Key>";
@@ -81,8 +91,10 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 });
             });
 
-            LoggerFactoryManager.Set(loggerFactory);
-            logger = LoggerFactoryManager.CreateLogger<Program>();
+            logger = loggerFactory.CreateLogger<Program>();
+
+            // Subscribe to the SDK's OpenTelemetry tracing (beta.4) to surface token usage / latency.
+            telemetryListener = VoiceLiveTelemetry.Enable(logger);
 
             IConfigurationRoot config = new ConfigurationBuilder()
                 .AddUserSecrets<Program>()
@@ -92,8 +104,29 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
             azureEndpoint = config["VoiceLiveAPI:AzureEndpoint"] ?? azureEndpoint;
             apiKey = config["AzureAIFoundry:ApiKey"] ?? apiKey;
             agentProjectName = config["AzureAIFoundry:AgentProjectName"] ?? agentProjectName;
+            agentName = config["AzureAIFoundry:AgentName"] ?? agentName;
             agentId = config["AzureAIFoundry:AgentId"] ?? agentId;
+            voiceName = config["VoiceLiveAPI:Voice"] ?? voiceName;
             agentAccessToken = config["AzureAIFoundry:AgentAccessToken"] ?? agentAccessToken;
+
+            // Environment-variable overrides (shared with the integration tests) take precedence over
+            // user-secrets, so the same env setup used for tests also works for the console.
+            modelName = config["VoiceLiveAPI:Model"] ?? modelName;
+            azureEndpoint = Environment.GetEnvironmentVariable("VOICELIVE_ENDPOINT") ?? azureEndpoint;
+            apiKey = Environment.GetEnvironmentVariable("VOICELIVE_APIKEY") ?? apiKey;
+            agentName = Environment.GetEnvironmentVariable("VOICELIVE_AGENT_NAME") ?? agentName;
+            agentProjectName = Environment.GetEnvironmentVariable("VOICELIVE_AGENT_PROJECT") ?? agentProjectName;
+            voiceName = Environment.GetEnvironmentVariable("VOICELIVE_VOICE") ?? voiceName;
+            modelName = Environment.GetEnvironmentVariable("VOICELIVE_MODEL") ?? modelName;
+            avatarBackend = Environment.GetEnvironmentVariable("VOICELIVE_AVATAR_BACKEND") ?? avatarBackend;
+
+            if (string.IsNullOrWhiteSpace(azureEndpoint) || !Uri.IsWellFormedUriString(azureEndpoint, UriKind.Absolute))
+            {
+                Console.WriteLine("[Config] Voice Live endpoint is not configured.");
+                Console.WriteLine("  Set env VOICELIVE_ENDPOINT, or user-secret 'VoiceLiveAPI:AzureEndpoint'");
+                Console.WriteLine("  e.g. https://<your-resource>.cognitiveservices.azure.com");
+                return;
+            }
 
             Console.WriteLine("Azure VoiceLive SDK Console Application");
             Console.WriteLine("Using Azure.AI.VoiceLive SDK (Official Azure SDK)");
@@ -125,10 +158,8 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                     logger);
 
                 await assistant.StartAsync(
-                    model,
-                    sessionOptions,
-                    currentMode != ConnectionMode.AIModel ? agentProjectName : null,
-                    currentMode != ConnectionMode.AIModel ? agentId : null);
+                    BuildSessionTarget(currentMode, model),
+                    sessionOptions);
 
                 Console.WriteLine("\nReady for conversation!");
                 PrintCommands();
@@ -147,6 +178,9 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                             break;
                         case ConsoleKey.M:
                             await SwitchModeAsync();
+                            break;
+                        case ConsoleKey.I:
+                            await SendImageAsync();
                             break;
                         case ConsoleKey.C:
                             await ClearAudioAsync();
@@ -195,6 +229,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
             Console.WriteLine("- Press 'R' to start/stop recording");
             Console.WriteLine("- Press 'P' to start/stop playback");
             Console.WriteLine("- Press 'M' to switch mode (requires reconnection)");
+            Console.WriteLine("- Press 'I' to send an image (vision-capable model; described in the response/avatar)");
             Console.WriteLine("- Press 'C' to clear audio queue");
             Console.WriteLine("- Press 'S' to show detailed status");
             Console.WriteLine("- Press 'V' to toggle avatar video streaming (Avatar mode only)");
@@ -205,14 +240,13 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
 
         private static (string model, VoiceLiveSessionOptions options) CreateSessionOptions(ConnectionMode mode)
         {
-            string model = "phi4-mm-realtime";
+            string model = modelName;
 
             var options = new VoiceLiveSessionOptions
             {
-                Instructions = "You are a helpful AI assistant. Please respond in the same language as the user speaks.",
                 InputAudioFormat = InputAudioFormat.Pcm16,
                 OutputAudioFormat = OutputAudioFormat.Pcm16,
-                Voice = new AzureStandardVoice("ja-JP-Nanami:DragonHDLatestNeural"),
+                Voice = CreateVoice(voiceName),
                 TurnDetection = new ServerVadTurnDetection
                 {
                     Threshold = 0.5f,
@@ -221,6 +255,12 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 },
                 InputAudioEchoCancellation = new AudioEchoCancellation()
             };
+
+            // 'instructions' is not supported for custom agent sessions; only set it for AI Model mode.
+            if (mode == ConnectionMode.AIModel)
+            {
+                options.Instructions = "You are a helpful AI assistant. Please respond in the same language as the user speaks.";
+            }
 
             options.Modalities.Clear();
             options.Modalities.Add(InteractionModality.Text);
@@ -303,6 +343,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                         return ConnectionMode.AIAgent;
                     case "3":
                         Console.WriteLine("Selected: Avatar Mode");
+                        ChooseAvatarBackend();
                         return ConnectionMode.Avatar;
                     default:
                         Console.Write("Invalid choice. Please enter 1, 2, or 3: ");
@@ -311,29 +352,148 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
             }
         }
 
+        /// <summary>
+        ///     Prompts for the session backend used underneath Avatar output and stores it in
+        ///     <see cref="avatarBackend" />. Agent (default) manages the conversation server-side; Model runs
+        ///     on a direct model session, which enables model-only features such as image input.
+        ///     The environment variable <c>VOICELIVE_AVATAR_BACKEND</c> supplies the default selection.
+        /// </summary>
+        private static void ChooseAvatarBackend()
+        {
+            bool defaultIsModel = string.Equals(avatarBackend, "model", StringComparison.OrdinalIgnoreCase);
+
+            Console.WriteLine("Choose Avatar session backend:");
+            Console.WriteLine("1. Agent (Foundry agent, Entra ID required)");
+            Console.WriteLine("2. Model (direct model session, enables image input)");
+            Console.Write($"Enter your choice (1 or 2) [default: {(defaultIsModel ? "2" : "1")}]: ");
+
+            while (true)
+            {
+                string? input = Console.ReadLine();
+                if (string.IsNullOrWhiteSpace(input))
+                {
+                    break;
+                }
+
+                switch (input.Trim())
+                {
+                    case "1":
+                        avatarBackend = "agent";
+                        break;
+                    case "2":
+                        avatarBackend = "model";
+                        break;
+                    default:
+                        Console.Write("Invalid choice. Please enter 1 or 2: ");
+                        continue;
+                }
+
+                break;
+            }
+
+            Console.WriteLine($"Avatar backend: {(string.Equals(avatarBackend, "model", StringComparison.OrdinalIgnoreCase) ? "Model" : "Agent")}");
+        }
+
         private static void InitializeClient()
         {
-            Console.WriteLine("Choose authentication method:");
-            Console.WriteLine("1. API Key");
-            Console.WriteLine("2. Entra ID (DefaultAzureCredential)");
-            Console.Write("Enter your choice (1 or 2): ");
-
-            useApiKeyAuth = ChooseAuthMethod() == 1;
-
-            Uri endpoint = new Uri(azureEndpoint);
-
-            if (useApiKeyAuth)
+            if (!IsAgentSession(currentMode))
             {
-                logger?.LogInformation("Initializing VoiceLiveClient (SDK) with API Key authentication...");
-                voiceLiveClient = new VoiceLiveClient(endpoint, new AzureKeyCredential(apiKey));
+                Console.WriteLine("Choose authentication method:");
+                Console.WriteLine("1. API Key");
+                Console.WriteLine("2. Entra ID (DefaultAzureCredential)");
+                Console.Write("Enter your choice (1 or 2): ");
+
+                useApiKeyAuth = ChooseAuthMethod() == 1;
             }
             else
             {
-                logger?.LogInformation("Initializing VoiceLiveClient (SDK) with Entra ID authentication...");
-                voiceLiveClient = new VoiceLiveClient(endpoint, new DefaultAzureCredential());
+                // Foundry agent invocation does not support key-based authentication; force Entra ID.
+                useApiKeyAuth = false;
+                Console.WriteLine("Agent mode requires Entra ID authentication (API key is not supported for agent invocation).");
+                Console.WriteLine("Using DefaultAzureCredential (sign in with 'az login' and ensure the appropriate Foundry RBAC role).");
             }
 
+            voiceLiveClient = CreateVoiceLiveClient(currentMode);
+
             logger?.LogInformation("VoiceLiveClient (SDK) initialized successfully");
+        }
+
+        /// <summary>
+        ///     Creates a <see cref="VoiceLiveClient" /> configured with the service (wire API) version
+        ///     appropriate for the given mode: GA (2025-10-01) for AI Model, and 2026-01-01-preview for
+        ///     AI Agent / Avatar (Foundry agent integration requires the preview wire API). The
+        ///     ServiceVersion is fixed at client construction, so the client is (re)created whenever the
+        ///     mode is selected or switched.
+        /// </summary>
+        /// <param name="mode">The connection mode the client will be used for.</param>
+        /// <returns>A configured <see cref="VoiceLiveClient" /> instance.</returns>
+        private static VoiceLiveClient CreateVoiceLiveClient(ConnectionMode mode)
+        {
+            VoiceLiveClientOptions.ServiceVersion serviceVersion = mode == ConnectionMode.AIModel
+                ? VoiceLiveClientOptions.ServiceVersion.V2025_10_01
+                : VoiceLiveClientOptions.ServiceVersion.V2026_01_01_PREVIEW;
+
+            VoiceLiveClientOptions clientOptions = new VoiceLiveClientOptions(serviceVersion);
+            Uri endpoint = new Uri(azureEndpoint);
+
+            logger?.LogInformation(
+                "Initializing VoiceLiveClient (SDK) - mode={mode}, serviceVersion={version}, auth={auth}",
+                mode, serviceVersion, useApiKeyAuth ? "API Key" : "Entra ID");
+
+            return useApiKeyAuth
+                ? new VoiceLiveClient(endpoint, new AzureKeyCredential(apiKey), clientOptions)
+                : new VoiceLiveClient(endpoint, new DefaultAzureCredential(), clientOptions);
+        }
+
+        /// <summary>
+        ///     Builds the session target for the given mode: a model session for AI Model, or a Foundry
+        ///     agent session (new agent-name method via <see cref="AgentSessionConfig" />) for AI Agent /
+        ///     Avatar.
+        /// </summary>
+        /// <param name="mode">The connection mode.</param>
+        /// <param name="model">The AI model name (used for AI Model mode).</param>
+        /// <returns>A <see cref="SessionTarget" /> describing the session to start.</returns>
+        private static SessionTarget BuildSessionTarget(ConnectionMode mode, string model)
+        {
+            if (!IsAgentSession(mode))
+            {
+                return SessionTarget.FromModel(model);
+            }
+
+            AgentSessionConfig agentConfig = new AgentSessionConfig(agentName, agentProjectName);
+            return SessionTarget.FromAgent(agentConfig);
+        }
+
+        /// <summary>
+        ///     Whether the given mode connects as a Foundry agent session (Entra ID required, conversation
+        ///     managed server-side). Avatar defaults to an agent backend, but runs on a model session when
+        ///     <c>VOICELIVE_AVATAR_BACKEND=model</c> — which enables model-only features such as image input.
+        /// </summary>
+        /// <param name="mode">The connection mode.</param>
+        /// <returns><c>true</c> for an agent-backed session; otherwise <c>false</c>.</returns>
+        private static bool IsAgentSession(ConnectionMode mode)
+        {
+            return mode == ConnectionMode.AIAgent
+                   || (mode == ConnectionMode.Avatar &&
+                       !string.Equals(avatarBackend, "model", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        ///     Builds the session voice from a configured name. OpenAI native voices (e.g. "marin",
+        ///     "cedar") are mapped to <see cref="OpenAIVoice" /> — they require a GPT real-time
+        ///     native-audio model; any other value is treated as an Azure standard/custom voice name
+        ///     (e.g. "ja-JP-Nanami:DragonHDLatestNeural") via <see cref="AzureStandardVoice" />.
+        /// </summary>
+        /// <param name="voice">The configured voice name (<c>VoiceLiveAPI:Voice</c>).</param>
+        /// <returns>A <see cref="VoiceProvider" /> for the session options.</returns>
+        private static VoiceProvider CreateVoice(string voice)
+        {
+            if (OpenAiVoiceNames.Contains(voice))
+            {
+                return new OpenAIVoice(new OAIVoice(voice));
+            }
+
+            return new AzureStandardVoice(voice);
         }
 
         private static int ChooseAuthMethod()
@@ -404,16 +564,61 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                     logger!);
 
                 await assistant.StartAsync(
-                    model,
-                    sessionOptions,
-                    currentMode != ConnectionMode.AIModel ? agentProjectName : null,
-                    currentMode != ConnectionMode.AIModel ? agentId : null);
+                    BuildSessionTarget(currentMode, model),
+                    sessionOptions);
 
                 Console.WriteLine("Mode switched successfully!");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error switching mode: {ex.Message}");
+            }
+        }
+
+        // Max image file size for the 'I' command. A large base64 data URI can exceed the Voice Live
+        // WebSocket message limit and cause the server to drop the connection, so oversized images are
+        // rejected up front (resize/compress the image below this size before sending).
+        private const long MaxImageSizeBytes = 256 * 1024;
+
+        private static async Task SendImageAsync()
+        {
+            if (assistant?.IsConnected != true)
+            {
+                Console.WriteLine("Not connected. Start a session first.");
+                return;
+            }
+
+            Console.Write($"Image path (press Enter for the bundled sample; max {MaxImageSizeBytes / 1024} KB): ");
+            string? path = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                path = Path.Combine(AppContext.BaseDirectory, "Assets", "sample_geometric.png");
+            }
+
+            path = path.Trim('"');
+            if (!File.Exists(path))
+            {
+                Console.WriteLine($"Image not found: {path}");
+                return;
+            }
+
+            long size = new FileInfo(path).Length;
+            if (size > MaxImageSizeBytes)
+            {
+                Console.WriteLine($"Image too large: {size / 1024} KB (max {MaxImageSizeBytes / 1024} KB). Not sent.");
+                Console.WriteLine("  Resize/compress the image (e.g. <=1024px) and try again.");
+                return;
+            }
+
+            Console.WriteLine($"Sending image: {path} ({size / 1024} KB)");
+            try
+            {
+                await assistant!.SendImageAsync(path);
+                Console.WriteLine("Image sent. The model's description will follow in the response (and avatar, if in Avatar mode).");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to send image: {ex.Message}");
             }
         }
 
@@ -480,16 +685,8 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
 
                 await Task.Delay(1000);
 
-                // Recreate client
-                Uri endpoint = new Uri(azureEndpoint);
-                if (useApiKeyAuth)
-                {
-                    voiceLiveClient = new VoiceLiveClient(endpoint, new AzureKeyCredential(apiKey));
-                }
-                else
-                {
-                    voiceLiveClient = new VoiceLiveClient(endpoint, new DefaultAzureCredential());
-                }
+                // Recreate client (with the ServiceVersion matching the current mode)
+                voiceLiveClient = CreateVoiceLiveClient(currentMode);
 
                 // Start new session
                 Console.WriteLine($"Reconnecting in {currentMode} mode...");
@@ -503,10 +700,8 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                     logger!);
 
                 await assistant.StartAsync(
-                    model,
-                    sessionOptions,
-                    currentMode != ConnectionMode.AIModel ? agentProjectName : null,
-                    currentMode != ConnectionMode.AIModel ? agentId : null);
+                    BuildSessionTarget(currentMode, model),
+                    sessionOptions);
 
                 Console.WriteLine("Reconnection successful!");
             }
@@ -536,6 +731,9 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
             audioHandler = null;
 
             voiceLiveClient = null;
+
+            telemetryListener?.Dispose();
+            telemetryListener = null;
 
             Console.WriteLine("Goodbye!");
         }

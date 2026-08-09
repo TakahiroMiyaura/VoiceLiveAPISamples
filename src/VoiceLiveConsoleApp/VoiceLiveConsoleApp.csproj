@@ -2,7 +2,8 @@
 
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
-		<TargetFramework>net8.0-windows</TargetFramework>
+		<!-- Matches VoiceLiveAPI.WebRtcAudio (SIPSorceryMedia.Windows targets net8.0-windows10.0.17763). -->
+		<TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<AssemblyName>Com.Reseul.Azure.AI.Samples.VoiceLiveConsoleApp</AssemblyName>
@@ -34,8 +35,10 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.8" />
 		<PackageReference Include="NAudio" Version="2.2.1" />
 		<PackageReference Include="SIPSorceryMedia.Abstractions" Version="8.0.12" />
-		<PackageReference Include="System.Text.Json" Version="9.0.8" />
-		<PackageReference Include="Azure.Identity" Version="1.14.2" />
+		<PackageReference Include="System.Text.Json" Version="10.0.3" />
+		<!-- Azure.Identity 参照は削除: Core 経由で解決される Azure.Core 1.57.0 が DefaultAzureCredential を提供し、
+		     Azure.Identity 1.14.2 併用時は Azure.Identity.DefaultAzureCredential が二重定義され CS0433 衝突するため。
+		     使用している TokenRequestContext / AccessToken は元来 Azure.Core の型。 -->
 		<PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.8" />
 		<PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.8" />
 		<PackageReference Include="FFMpegCore" Version="5.1.0" />
@@ -45,7 +48,9 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\VoiceLiveAPI.Avatars\VoiceLiveAPI.Avatars.csproj" />
+		<ProjectReference Include="..\VoiceLiveAPI.Avatars.Streaming\VoiceLiveAPI.Avatars.Streaming.csproj" />
 		<ProjectReference Include="..\VoiceLiveAPI.Core\VoiceLiveAPI.Core.csproj" />
+		<ProjectReference Include="..\VoiceLiveAPI.WebRtcAudio\VoiceLiveAPI.WebRtcAudio.csproj" />
 	</ItemGroup>
 
 </Project>
