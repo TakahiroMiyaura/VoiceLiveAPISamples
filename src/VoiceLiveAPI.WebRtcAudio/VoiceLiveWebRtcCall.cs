@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Takahiro Miyaura
+﻿// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
@@ -216,8 +216,9 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.WebRtcAudio
 
                 var negotiated = formats[0];
                 logger.LogInformation(
-                    "[WebRtcCall] Audio format negotiated: codec={codec} id={id} name={name} rate={rate}",
-                    negotiated.Codec, negotiated.FormatID, negotiated.FormatName, negotiated.ClockRate);
+                    "[WebRtcCall] Audio format negotiated: codec={codec} id={id} name={name} rate={rate} channels={ch}",
+                    negotiated.Codec, negotiated.FormatID, negotiated.FormatName, negotiated.ClockRate,
+                    negotiated.ChannelCount);
 
                 // The remote answer advertises lowercase "opus" on a dynamic payload, which SIPSorcery leaves
                 // as Codec=Unknown — so the Windows endpoint can't encode/decode and no audio flows either way.
@@ -227,8 +228,12 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.WebRtcAudio
                     ? new AudioFormat(AudioCodecsEnum.OPUS, negotiated.FormatID, 48000, 2, negotiated.Parameters)
                     : negotiated;
 
-                logger.LogInformation("[WebRtcCall] Audio format applied: codec={codec} id={id} rate={rate}",
-                    format.Codec, format.FormatID, format.ClockRate);
+                logger.LogInformation(
+                    "[WebRtcCall] Audio format applied: codec={codec} id={id} rate={rate} channels={ch}",
+                    format.Codec, format.FormatID, format.ClockRate, format.ChannelCount);
+
+                // Source and sink share one format: WindowsAudioEndPoint keeps a single format manager, so
+                // setting them apart silently breaks the direction that was set first.
                 audioEndPoint.SetAudioSourceFormat(format);
                 audioEndPoint.SetAudioSinkFormat(format);
             };
@@ -259,8 +264,8 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.WebRtcAudio
                     }
 
                     // GotAudioRtp derives frame timing from the RTP header internally. The newer
-                    // GotEncodedMediaFrame requires a pre-built EncodedAudioFrame (format + duration), which we
-                    // avoid here to not hand-compute frame durations.
+                    // GotEncodedMediaFrame requires a pre-built EncodedAudioFrame (format + duration), which
+                    // we avoid here to not hand-compute frame durations.
 #pragma warning disable CS0618
                     audioEndPoint.GotAudioRtp(remote, pkt.Header.SyncSource, pkt.Header.SequenceNumber,
                         pkt.Header.Timestamp, pkt.Header.PayloadType, pkt.Header.MarkerBit == 1, pkt.Payload);

@@ -1086,12 +1086,7 @@ serverManager.OnResponseOutputItemAddedReceived += DebugMessages;
             Console.WriteLine("- 'X' send text"
                               + (useStreamingTextInput ? " (spoken verbatim as a pre-generated assistant message)" : string.Empty));
 
-            // Images only reach a model session; agent sessions reject them.
-            if (currentMode == ConnectionMode.AIModel || currentMode == ConnectionMode.FeatureCheck
-                || (currentMode == ConnectionMode.Avatar && !IsAgentSession(currentMode)))
-            {
-                Console.WriteLine("- 'I' send an image");
-            }
+            Console.WriteLine("- 'I' send an image");
 
             Console.WriteLine("- 'Q' quit");
             Console.WriteLine("  (diagnostics: 'S' status, 'C' clear audio, 'P' playback, 'T' reconnect, 'M' switch mode)");
@@ -1221,13 +1216,18 @@ serverManager.OnResponseOutputItemAddedReceived += DebugMessages;
             // sample: modalities + instructions + voice + turn_detection ONLY. The model is passed via the URL
             // (not the session), and WebSocket-audio fields (input_audio_format / sampling_rate) are omitted so
             // the service allocates an RTP media client instead of a pcm16 one.
+            // The voice decides the spoken language, so --voice is what switches this to Japanese (the
+            // instructions only steer wording). azure-realtime models take their own native voice, which has
+            // no locale to choose — ask for Japanese in the instructions there instead.
             object voice = isAzureRealtime
-                ? (object)new { type = "azure-realtime-native", name = "ava" }
-                : new { type = "azure-standard", name = "en-US-AvaNeural" };
+                ? (object)new { type = "azure-realtime-native", name = ConsoleSettings.GetOr("Voice", "ava") }
+                : new { type = "azure-standard", name = ConsoleSettings.GetOr("Voice", "en-US-AvaNeural") };
+
             object sessionConfig = new
             {
                 modalities = new[] { "text", "audio" },
-                instructions = "You are a helpful assistant. Respond concisely.",
+                instructions = ConsoleSettings.GetOr("Instructions",
+                    "You are a helpful assistant. Respond concisely."),
                 voice,
                 turn_detection = new
                 {
@@ -1498,15 +1498,6 @@ serverManager.OnResponseOutputItemAddedReceived += DebugMessages;
         /// <returns>A task representing the asynchronous operation.</returns>
         private static async Task SendImageAsync()
         {
-            // Image input works on a Model session (AI Model mode, or Avatar with the Model backend). Agent
-            // sessions reject it with a server error (and drop the session) — confirmed on both
-            // 2026-01-01-preview and 2026-06-01-preview — so block agent-backed sessions.
-            if (IsAgentSession(currentMode))
-            {
-                Console.WriteLine("Image input is not supported on Agent sessions (they reject images). Use AI Model mode, or Avatar with the Model backend.");
-                return;
-            }
-
             if (voiceLiveSession == null)
             {
                 Console.WriteLine("Session is not initialized.");

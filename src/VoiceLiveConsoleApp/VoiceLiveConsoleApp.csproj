@@ -3,7 +3,7 @@
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
 		<!-- Matches VoiceLiveAPI.WebRtcAudio (SIPSorceryMedia.Windows targets net8.0-windows10.0.17763). -->
-		<TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
+		<TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<AssemblyName>Com.Reseul.Azure.AI.Samples.VoiceLiveConsoleApp</AssemblyName>
@@ -31,16 +31,15 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.8" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.8" />
-		<PackageReference Include="NAudio" Version="2.2.1" />
-		<PackageReference Include="SIPSorceryMedia.Abstractions" Version="8.0.12" />
-		<PackageReference Include="System.Text.Json" Version="10.0.3" />
+		<PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.10" />
+		<PackageReference Include="NAudio" Version="2.3.0" />
+		<PackageReference Include="SIPSorceryMedia.Abstractions" Version="10.0.9" />
 		<!-- Azure.Identity 参照は削除: Core 経由で解決される Azure.Core 1.57.0 が DefaultAzureCredential を提供し、
 		     Azure.Identity 1.14.2 併用時は Azure.Identity.DefaultAzureCredential が二重定義され CS0433 衝突するため。
 		     使用している TokenRequestContext / AccessToken は元来 Azure.Core の型。 -->
-		<PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.8" />
-		<PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.8" />
+		<PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.10" />
 		<PackageReference Include="FFMpegCore" Version="5.1.0" />
 		<PackageReference Include="CliWrap" Version="3.6.6" />
 		<PackageReference Include="Concentus" Version="2.2.2" />

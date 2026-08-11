@@ -218,6 +218,11 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
                 secretKey: "VoiceLiveAPI:McpLabel", environmentVariable: "VOICELIVE_MCP_LABEL",
                 argument: "--mcp-label", defaultValue: "deepwiki"),
 
+            new ConsoleSetting("Instructions", SettingCategory.FeatureInput,
+                "System instructions for the assistant (WebRTC voice; other modes set their own).",
+                secretKey: "VoiceLiveAPI:Instructions", environmentVariable: "VOICELIVE_INSTRUCTIONS",
+                argument: "--instructions"),
+
             new ConsoleSetting("Greeting", SettingCategory.FeatureInput,
                 "What the assistant says first when the proactive greeting feature is on.",
                 secretKey: "VoiceLiveAPI:Greeting", environmentVariable: "VOICELIVE_GREETING",

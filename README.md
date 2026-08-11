@@ -2,7 +2,7 @@
 
 [![License: BSL-1.0](https://img.shields.io/badge/License-BSL--1.0-blue.svg)](https://opensource.org/licenses/BSL-1.0)
 
-A .NET 8 console application and reusable client library for real-time voice conversation with Azure AI Foundry's Voice Live API. Supports **AI Model mode**, **AI Agent mode**, and **Avatar mode** with microphone input, speaker output, and real-time video streaming.
+A .NET 10 console application and reusable client library for real-time voice conversation with Azure AI Foundry's Voice Live API. Supports **AI Model mode**, **AI Agent mode**, and **Avatar mode** with microphone input, speaker output, and real-time video streaming.
 
 [![Foundry VoiceLiveAPI AvatarDemo](https://img.youtube.com/vi/lZ5fp42zWNs/0.jpg)](https://www.youtube.com/watch?v=lZ5fp42zWNs)
 
@@ -36,13 +36,12 @@ A .NET 8 console application and reusable client library for real-time voice con
 This repository contains two console application samples:
 
 **Which one to start with**: if you want the stable feature set with the least machinery, use
-**VoiceLiveSDKConsoleApp**. If you want the preview additions, use **VoiceLiveConsoleApp** — the
-official .NET SDK currently tops out at the `2026-01-01-preview` wire version, so features that
-only exist in `2026-06-01-preview` cannot be reached through it at all.
+**VoiceLiveSDKConsoleApp**. If you want to see a preview feature exercised on its own, use
+**VoiceLiveConsoleApp**, which talks to the wire directly and can select `2026-06-01-preview`.
 
 ### VoiceLiveConsoleApp (Custom WebSocket Implementation)
 
-A console application utilizing "VoiceLiveAPI.Core," a custom WebSocket library built from scratch based on the Foundry Tools Voice Live API specifications. It is where the preview features live, because talking to the wire directly is what makes them reachable.
+A console application utilizing "VoiceLiveAPI.Core," a custom WebSocket library built from scratch based on the Foundry Tools Voice Live API specifications.
 
 - **Direct WebSocket control**: Full control over WebSocket communication
 - **Custom message handling**: Event-based handlers via `ServerMessageHandlerManager`
@@ -88,13 +87,13 @@ PS D:\hoge\VoiceLiveAPISamples > dotnet run --project src/VoiceLiveSDKConsoleApp
 
 | Package Name                                 | Version         | Purpose                    |
 |----------------------------------------------|-----------------|----------------------------|
-| Microsoft.Extensions.Configuration           | 9.0.8           | Configuration management   |
-| Microsoft.Extensions.Configuration.UserSecrets | 9.0.8        | Secure configuration       |
-| Microsoft.Extensions.Logging                | 9.0.8           | Logging infrastructure     |
+| Microsoft.Extensions.Configuration           | 10.0.10           | Configuration management   |
+| Microsoft.Extensions.Configuration.UserSecrets | 10.0.10        | Secure configuration       |
+| Microsoft.Extensions.Logging                | 10.0.10           | Logging infrastructure     |
 | System.Text.Json                             | 10.0.3          | JSON serialization         |
-| NAudio                                       | 2.2.1           | Cross-platform audio      |
-| SIPSorcery                                   | 8.0.23          | WebRTC implementation      |
-| SIPSorceryMedia.Abstractions                | 8.0.12          | Media format abstractions |
+| NAudio                                       | 2.3.0            | Cross-platform audio      |
+| SIPSorcery                                   | 10.0.9          | WebRTC implementation      |
+| SIPSorceryMedia.Abstractions                | 10.0.9          | Media format abstractions |
 | Concentus                                    | 2.2.2           | Opus audio codec           |
 | FFMpegCore                                   | 5.1.0           | FFmpeg integration         |
 | CliWrap                                      | 3.6.6           | Command line process wrapper |
@@ -147,17 +146,31 @@ PS C:\hoge> cd VoiceLiveAPISamples
 
 2. Register the Azure AI Foundry endpoint.
 
-**When using only EntraID login (az login, etc.), 'AzureAIFoundry:ApiKey' is not required.**
+Only the first two are needed to talk to a model. Add the agent ones when you want AI Agent mode.
 
 ```powershell
 PS D:\hoge\VoiceLiveAPISamples> dotnet user-secrets init --project src\VoiceLiveConsoleApp
-PS D:\hoge\VoiceLiveAPISamples> dotnet user-secrets set "Identity:AzureEndpoint" "<Token request url(ex:https://ai.azure.com/.default)>" --project src\VoiceLiveConsoleApp
-PS D:\hoge\VoiceLiveAPISamples> dotnet user-secrets set "AzureAIFoundry:AgentProjectName" "<your Azure AI Foundry Project Name>" --project src\VoiceLiveConsoleApp
-PS D:\hoge\VoiceLiveAPISamples> dotnet user-secrets set "VoiceLiveAPI:AzureEndpoint" "<your Azure AI Services Endpoint>" --project src\VoiceLiveConsoleApp
-PS D:\hoge\VoiceLiveAPISamples> dotnet user-secrets set "AzureAIFoundry:AgentId" "<your Azure AI Agent Id>" --project src\VoiceLiveConsoleApp
-PS D:\hoge\VoiceLiveAPISamples> dotnet user-secrets set "AzureAIFoundry:AgentAccessToken" "<Azure AI Foundry API Key>" --project src\VoiceLiveConsoleApp
-PS D:\hoge\VoiceLiveAPISamples> dotnet user-secrets set "AzureAIFoundry:ApiKey" "<Azure AI Foundry API Key>" --project src\VoiceLiveConsoleApp
+
+# Required
+PS ...> dotnet user-secrets set "VoiceLiveAPI:AzureEndpoint" "<your Azure AI Services Endpoint>" --project src\VoiceLiveConsoleApp
+PS ...> dotnet user-secrets set "Identity:AzureEndpoint" "https://ai.azure.com/.default" --project src\VoiceLiveConsoleApp
+
+# API key authentication (skip it if you only sign in with Entra ID / az login)
+PS ...> dotnet user-secrets set "AzureAIFoundry:ApiKey" "<Azure AI Foundry API Key>" --project src\VoiceLiveConsoleApp
+
+# AI Agent mode (Entra ID only — an API key is not accepted for agent sessions)
+PS ...> dotnet user-secrets set "AzureAIFoundry:AgentName" "<your agent name>" --project src\VoiceLiveConsoleApp
+PS ...> dotnet user-secrets set "AzureAIFoundry:AgentProjectName" "<your Azure AI Foundry Project Name>" --project src\VoiceLiveConsoleApp
 ```
+
+> [!IMPORTANT]
+> Agent sessions connect by **name** (`AgentName` + `AgentProjectName`). The older `AzureAIFoundry:AgentId`
+> and `AzureAIFoundry:AgentAccessToken` pair is for the classic agent connection, which **retires on
+> 2026-08-31** — set those two only if you are still using it.
+
+Every one of these can also be given as an environment variable, which is usually easier for a
+machine you already have set up: see [Configuration](#configuration) below, or run
+`dotnet run --project src/VoiceLiveConsoleApp -- --help` to list every setting with its current value.
 
 3. Build the console application.
 ```powershell

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Takahiro Miyaura
+﻿// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
@@ -129,39 +129,6 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
 
             logger.LogInformation("Avatar video streaming started");
             return true;
-        }
-
-        /// <summary>
-        ///     Shows information about the current avatar streaming state.
-        /// </summary>
-        public void ShowStreamingInfo()
-        {
-            if (avatarVideoStreamer == null)
-            {
-                Console.WriteLine("Avatar video streamer not initialized. Connect to avatar first.");
-                return;
-            }
-
-            Console.WriteLine("Avatar streaming information:");
-            Console.WriteLine("   - Real-time RTP streaming is active");
-            Console.WriteLine("   - Video window opens automatically when streaming starts");
-            Console.WriteLine("   - All playback is real-time only");
-        }
-
-        /// <summary>
-        ///     Toggles avatar video streaming display information.
-        /// </summary>
-        public void ToggleVideoStreaming()
-        {
-            if (avatarVideoStreamer == null)
-            {
-                Console.WriteLine("Avatar video streamer not initialized. Connect to avatar first.");
-                return;
-            }
-
-            Console.WriteLine("Avatar RTP streaming is active");
-            Console.WriteLine("   - Status: Real-time synchronized audio/video playback");
-            Console.WriteLine("   - Video window opens automatically when streaming starts");
         }
 
         #endregion

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Takahiro Miyaura
+﻿// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
@@ -63,7 +63,12 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveAPI
             if (string.IsNullOrEmpty(tokenRequestUrl))
                 throw new ArgumentNullException(nameof(tokenRequestUrl));
 
-            DefaultAzureCredential credential = new();
+            // Managed identity is excluded: on a developer machine there is none, and probing the IMDS
+            // endpoint stalls the chain long enough to look like a hang.
+            DefaultAzureCredential credential = new(new DefaultAzureCredentialOptions
+            {
+                ExcludeManagedIdentityCredential = true
+            });
             TokenRequestContext requestContext = new(new[] { tokenRequestUrl });
 
             AccessToken tokenResult = await credential.GetTokenAsync(requestContext, cancellationToken);

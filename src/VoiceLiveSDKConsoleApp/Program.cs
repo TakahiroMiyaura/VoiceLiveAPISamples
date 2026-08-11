@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Takahiro Miyaura
+﻿// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
@@ -47,7 +47,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         private static string agentName = "<your Azure AI Agent Name>";
         private static string agentId = "<your Azure AI Agent Id>";
         private static string voiceName = "ja-JP-Nanami:DragonHDLatestNeural";
-        private static string modelName = "phi4-mm-realtime";
+        private static string modelName = "gpt-4o";
         private static string avatarBackend = "agent";
 
         /// <summary>OpenAI native voice names (used with GPT real-time models), e.g. "marin" / "cedar".</summary>
@@ -188,18 +188,6 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                         case ConsoleKey.S:
                             ShowStatus();
                             break;
-                        case ConsoleKey.V:
-                            if (avatarHandler != null)
-                                avatarHandler.ToggleVideoStreaming();
-                            else
-                                Console.WriteLine("Video streaming is only available in Avatar mode");
-                            break;
-                        case ConsoleKey.F:
-                            if (avatarHandler != null)
-                                avatarHandler.ShowStreamingInfo();
-                            else
-                                Console.WriteLine("Avatar streaming is only available in Avatar mode");
-                            break;
                         case ConsoleKey.T:
                             await TestAndReconnectAsync();
                             break;
@@ -226,16 +214,12 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         private static void PrintCommands()
         {
             Console.WriteLine("Commands:");
-            Console.WriteLine("- Press 'R' to start/stop recording");
-            Console.WriteLine("- Press 'P' to start/stop playback");
-            Console.WriteLine("- Press 'M' to switch mode (requires reconnection)");
-            Console.WriteLine("- Press 'I' to send an image (vision-capable model; described in the response/avatar)");
-            Console.WriteLine("- Press 'C' to clear audio queue");
-            Console.WriteLine("- Press 'S' to show detailed status");
-            Console.WriteLine("- Press 'V' to toggle avatar video streaming (Avatar mode only)");
-            Console.WriteLine("- Press 'F' to show avatar streaming information (Avatar mode only)");
-            Console.WriteLine("- Press 'T' to test connection and reconnect if needed");
-            Console.WriteLine("- Press 'Q' to quit");
+            Console.WriteLine("- 'R' record (auto-stops when you finish speaking)");
+            Console.WriteLine("- 'I' send an image (vision-capable model)");
+            Console.WriteLine("- 'Q' quit");
+            Console.WriteLine("  (diagnostics: 'S' status, 'C' clear audio, 'P' playback, 'T' reconnect, 'M' switch mode)");
+            Console.WriteLine();
+            Console.WriteLine("  The avatar video window opens automatically once frames arrive (FFplay must be on PATH).");
         }
 
         private static (string model, VoiceLiveSessionOptions options) CreateSessionOptions(ConnectionMode mode)
@@ -419,12 +403,35 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         }
 
         /// <summary>
+        ///     Builds the Entra ID credential used for keyless auth.
+        /// </summary>
+        /// <remarks>
+        ///     Managed identity is excluded because this runs on a developer machine, where there is none:
+        ///     leaving it in makes the chain probe the IMDS endpoint and wait for it to time out, which looks
+        ///     like the app hanging right after "Connecting...".
+        /// </remarks>
+        /// <returns>The credential.</returns>
+        private static DefaultAzureCredential CreateCredential()
+        {
+            return new DefaultAzureCredential(new DefaultAzureCredentialOptions
+            {
+                ExcludeManagedIdentityCredential = true
+            });
+        }
+
+        /// <summary>
         ///     Creates a <see cref="VoiceLiveClient" /> configured with the service (wire API) version
         ///     appropriate for the given mode: GA (2025-10-01) for AI Model, and 2026-01-01-preview for
         ///     AI Agent / Avatar (Foundry agent integration requires the preview wire API). The
         ///     ServiceVersion is fixed at client construction, so the client is (re)created whenever the
         ///     mode is selected or switched.
         /// </summary>
+        /// <remarks>
+        ///     SDK 1.2.0 added two GA wire versions, <c>2026-04-10</c> and <c>2026-07-15</c>, and much of what
+        ///     used to be preview-only ships in them. The defaults above are unchanged so behavior stays the
+        ///     same, but <c>VOICELIVE_SDK_SERVICE_VERSION</c> selects another one — pass the enum name
+        ///     (<c>V2026_07_15</c>) or the wire version (<c>2026-07-15</c>).
+        /// </remarks>
         /// <param name="mode">The connection mode the client will be used for.</param>
         /// <returns>A configured <see cref="VoiceLiveClient" /> instance.</returns>
         private static VoiceLiveClient CreateVoiceLiveClient(ConnectionMode mode)
@@ -432,6 +439,26 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
             VoiceLiveClientOptions.ServiceVersion serviceVersion = mode == ConnectionMode.AIModel
                 ? VoiceLiveClientOptions.ServiceVersion.V2025_10_01
                 : VoiceLiveClientOptions.ServiceVersion.V2026_01_01_PREVIEW;
+
+            string? requested = Environment.GetEnvironmentVariable("VOICELIVE_SDK_SERVICE_VERSION");
+            if (!string.IsNullOrWhiteSpace(requested))
+            {
+                string wanted = requested.Trim().Replace("-", "_");
+                if (!wanted.StartsWith("V", StringComparison.OrdinalIgnoreCase))
+                {
+                    wanted = "V" + wanted;
+                }
+
+                if (Enum.TryParse(wanted, true, out VoiceLiveClientOptions.ServiceVersion parsed))
+                {
+                    serviceVersion = parsed;
+                }
+                else
+                {
+                    Console.WriteLine($"Unknown service version '{requested}'. Using {serviceVersion}. "
+                                      + $"Available: {string.Join(", ", Enum.GetNames<VoiceLiveClientOptions.ServiceVersion>())}");
+                }
+            }
 
             VoiceLiveClientOptions clientOptions = new VoiceLiveClientOptions(serviceVersion);
             Uri endpoint = new Uri(azureEndpoint);
@@ -442,7 +469,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
 
             return useApiKeyAuth
                 ? new VoiceLiveClient(endpoint, new AzureKeyCredential(apiKey), clientOptions)
-                : new VoiceLiveClient(endpoint, new DefaultAzureCredential(), clientOptions);
+                : new VoiceLiveClient(endpoint, CreateCredential(), clientOptions);
         }
 
         /// <summary>
