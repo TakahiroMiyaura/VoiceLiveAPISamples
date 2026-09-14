@@ -29,7 +29,12 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         /// <summary>
         ///     Avatar mode with video streaming capabilities.
         /// </summary>
-        Avatar
+        Avatar,
+
+        /// <summary>
+        ///     A single feature from <see cref="SdkFeatureCatalog" />, exercised on its own.
+        /// </summary>
+        Feature
     }
 
     /// <summary>
@@ -66,6 +71,9 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         private static VoiceLiveAssistant? assistant;
         private static AudioHandler? audioHandler;
         private static AvatarHandler? avatarHandler;
+
+        /// <summary>The feature chosen from the catalog, when running in <see cref="ConnectionMode.Feature" />.</summary>
+        private static SdkFeature? currentFeature;
 
         #endregion
 
@@ -138,9 +146,9 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 InitializeClient();
 
                 audioHandler = new AudioHandler(logger);
-                audioHandler.Initialize(currentMode == ConnectionMode.Avatar);
+                audioHandler.Initialize(UsesAvatar(currentMode));
 
-                if (currentMode == ConnectionMode.Avatar)
+                if (UsesAvatar(currentMode))
                 {
                     avatarHandler = new AvatarHandler(logger);
                     avatarHandler.Initialize();
@@ -163,6 +171,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
 
                 Console.WriteLine("\nReady for conversation!");
                 PrintCommands();
+                PrintFeatureHint();
 
                 bool running = true;
                 while (running)
@@ -211,6 +220,26 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
 
         #region Private Methods
 
+        /// <summary>
+        ///     Prints how to exercise the chosen feature, once the session is up.
+        /// </summary>
+        private static void PrintFeatureHint()
+        {
+            if (currentFeature == null)
+            {
+                return;
+            }
+
+            Console.WriteLine();
+            Console.WriteLine($"[Feature] {currentFeature.Id}");
+            foreach (string line in currentFeature.HintLines)
+            {
+                Console.WriteLine(line);
+            }
+
+            Console.WriteLine();
+        }
+
         private static void PrintCommands()
         {
             Console.WriteLine("Commands:");
@@ -240,8 +269,8 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 InputAudioEchoCancellation = new AudioEchoCancellation()
             };
 
-            // 'instructions' is not supported for custom agent sessions; only set it for AI Model mode.
-            if (mode == ConnectionMode.AIModel)
+            // 'instructions' is not supported for custom agent sessions; only set it for model sessions.
+            if (!IsAgentSession(mode))
             {
                 options.Instructions = "You are a helpful AI assistant. Please respond in the same language as the user speaks.";
             }
@@ -280,7 +309,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
 
             // Avatar mode - configure avatar character and video settings
             if (mode == ConnectionMode.Avatar)
-            {
+            {  // (a feature that shows an avatar sets its own configuration below)
                 options.Avatar = new AvatarConfiguration("lisa", false)
                 {
                     Style = "casual-sitting",
@@ -297,42 +326,102 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 };
             }
 
+            // The chosen feature configures itself last, so it can override any default above.
+            if (mode == ConnectionMode.Feature)
+            {
+                currentFeature?.Apply(options);
+            }
+
             return (model, options);
         }
 
+        /// <summary>
+        ///     Asks what to run. The first choice is what the user actually decides between: hold a
+        ///     conversation, or exercise one feature on its own.
+        /// </summary>
+        /// <returns>The selected connection mode.</returns>
         private static ConnectionMode ChooseConnectionMode()
         {
-            Console.WriteLine("Choose connection mode:");
-            Console.WriteLine("1. AI Model Mode");
-            Console.WriteLine("2. AI Agent Mode");
-            Console.WriteLine("3. Avatar Mode (with video streaming)");
-            Console.Write("Enter your choice (1, 2, or 3): ");
+            Console.WriteLine();
+            Console.WriteLine("Choose:");
+            Console.WriteLine("1. Conversation  (talk to a model, an agent, or an avatar)");
+            Console.WriteLine("2. Features      (try one SDK feature on its own)");
+
+            return Prompt("Enter your choice (1 or 2): ", 2) == 1
+                ? ChooseConversationMode()
+                : ChooseFeature();
+        }
+
+        /// <summary>
+        ///     Prompts for one of the conversation modes.
+        /// </summary>
+        /// <returns>The selected connection mode.</returns>
+        private static ConnectionMode ChooseConversationMode()
+        {
+            Console.WriteLine("Choose a conversation mode:");
+            Console.WriteLine("1. AI Model   (talk to a model)");
+            Console.WriteLine("2. AI Agent   (talk to a Foundry agent)");
+            Console.WriteLine("3. Avatar     (model or agent, with WebRTC video)");
+
+            switch (Prompt("Enter your choice (1-3): ", 3))
+            {
+                case 1:
+                    Console.WriteLine("Selected: AI Model Mode");
+                    return ConnectionMode.AIModel;
+                case 2:
+                    Console.WriteLine("Selected: AI Agent Mode");
+                    return ConnectionMode.AIAgent;
+                default:
+                    Console.WriteLine("Selected: Avatar Mode");
+                    ChooseAvatarBackend();
+                    return ConnectionMode.Avatar;
+            }
+        }
+
+        /// <summary>
+        ///     Prompts for a single feature to exercise and stores it in <see cref="currentFeature" />.
+        /// </summary>
+        /// <returns><see cref="ConnectionMode.Feature" />.</returns>
+        private static ConnectionMode ChooseFeature()
+        {
+            IReadOnlyList<SdkFeature> features = SdkFeatureCatalog.All;
+
+            Console.WriteLine($"Choose a feature (runs at wire version {SdkFeatureCatalog.FeatureServiceVersion}):");
+            for (var i = 0; i < features.Count; i++)
+            {
+                Console.WriteLine($"{i + 1}. {features[i].Title}");
+            }
+
+            currentFeature = features[Prompt($"Enter your choice (1-{features.Count}): ", features.Count) - 1];
+            Console.WriteLine($"Selected feature: {currentFeature.Id}");
+
+            // Avatar features need a session underneath, same as Avatar mode does.
+            if (currentFeature.Kind == SdkFeatureKind.AvatarSession)
+            {
+                ChooseAvatarBackend();
+            }
+
+            return ConnectionMode.Feature;
+        }
+
+        /// <summary>
+        ///     Reads a number in <c>1..max</c>, re-prompting until it gets one.
+        /// </summary>
+        /// <param name="prompt">The prompt to print.</param>
+        /// <param name="max">The highest accepted choice.</param>
+        /// <returns>The chosen number.</returns>
+        private static int Prompt(string prompt, int max)
+        {
+            Console.Write(prompt);
 
             while (true)
             {
-                string? input = Console.ReadLine();
-                if (string.IsNullOrEmpty(input))
+                if (int.TryParse(Console.ReadLine()?.Trim(), out int choice) && choice >= 1 && choice <= max)
                 {
-                    Console.Write("Please enter 1, 2, or 3: ");
-                    continue;
+                    return choice;
                 }
 
-                switch (input.Trim())
-                {
-                    case "1":
-                        Console.WriteLine("Selected: AI Model Mode");
-                        return ConnectionMode.AIModel;
-                    case "2":
-                        Console.WriteLine("Selected: AI Agent Mode");
-                        return ConnectionMode.AIAgent;
-                    case "3":
-                        Console.WriteLine("Selected: Avatar Mode");
-                        ChooseAvatarBackend();
-                        return ConnectionMode.Avatar;
-                    default:
-                        Console.Write("Invalid choice. Please enter 1, 2, or 3: ");
-                        break;
-                }
+                Console.Write($"Invalid choice. Please enter 1-{max}: ");
             }
         }
 
@@ -436,8 +525,9 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         /// <returns>A configured <see cref="VoiceLiveClient" /> instance.</returns>
         private static VoiceLiveClient CreateVoiceLiveClient(ConnectionMode mode)
         {
-            VoiceLiveClientOptions.ServiceVersion serviceVersion = mode == ConnectionMode.AIModel
-                ? VoiceLiveClientOptions.ServiceVersion.V2025_10_01
+            VoiceLiveClientOptions.ServiceVersion serviceVersion =
+                mode == ConnectionMode.Feature ? SdkFeatureCatalog.FeatureServiceVersion
+                : mode == ConnectionMode.AIModel ? VoiceLiveClientOptions.ServiceVersion.V2025_10_01
                 : VoiceLiveClientOptions.ServiceVersion.V2026_01_01_PREVIEW;
 
             string? requested = Environment.GetEnvironmentVariable("VOICELIVE_SDK_SERVICE_VERSION");
@@ -501,8 +591,19 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         private static bool IsAgentSession(ConnectionMode mode)
         {
             return mode == ConnectionMode.AIAgent
-                   || (mode == ConnectionMode.Avatar &&
+                   || (UsesAvatar(mode) &&
                        !string.Equals(avatarBackend, "model", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        ///     Whether the mode shows an avatar — either Avatar mode itself, or a feature that configures one.
+        /// </summary>
+        /// <param name="mode">The connection mode.</param>
+        /// <returns><c>true</c> when an avatar is part of the session.</returns>
+        private static bool UsesAvatar(ConnectionMode mode)
+        {
+            return mode == ConnectionMode.Avatar
+                   || (mode == ConnectionMode.Feature && currentFeature?.Kind == SdkFeatureKind.AvatarSession);
         }
 
         /// <summary>

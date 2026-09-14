@@ -1152,6 +1152,24 @@ serverManager.OnResponseOutputItemAddedReceived += DebugMessages;
         }
 
         /// <summary>
+        ///     Creates the Entra ID credential used for every connection this console makes.
+        /// </summary>
+        /// <remarks>
+        ///     Managed identity is excluded: a developer machine has none, and probing the IMDS endpoint
+        ///     stalls the credential chain long enough to look like a hang at "Connecting...", with no
+        ///     exception to explain it. Both the first connection and every reconnect go through here so
+        ///     the two cannot drift apart.
+        /// </remarks>
+        /// <returns>A credential that skips the managed identity probe.</returns>
+        private static DefaultAzureCredential CreateEntraCredential()
+        {
+            return new DefaultAzureCredential(new DefaultAzureCredentialOptions
+            {
+                ExcludeManagedIdentityCredential = true
+            });
+        }
+
+        /// <summary>
         ///     Initializes the VoiceLive API client based on the specified mode.
         /// </summary>
         /// <returns>A task representing the asynchronous operation.</returns>
@@ -1173,7 +1191,7 @@ serverManager.OnResponseOutputItemAddedReceived += DebugMessages;
                     logger?.LogInformation("Initializing VoiceLiveClient with Entra ID authentication...");
                     voiceLiveClient = new VoiceLiveClient(
                         azureEndpoint,
-                        new DefaultAzureCredential(),
+                        CreateEntraCredential(),
                         new[] { azureIdentityTokenRequestUrl },
                         CreateClientOptions());
                 }
@@ -1913,7 +1931,7 @@ serverManager.OnResponseOutputItemAddedReceived += DebugMessages;
                 {
                     voiceLiveClient = new VoiceLiveClient(
                         azureEndpoint,
-                        new DefaultAzureCredential(),
+                        CreateEntraCredential(),
                         new[] { azureIdentityTokenRequestUrl },
                         CreateClientOptions());
                 }

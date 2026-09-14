@@ -35,7 +35,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.AI.VoiceLive" Version="1.1.0" />
+    <PackageReference Include="Azure.AI.VoiceLive" Version="1.2.0" />
     <!-- Azure.Identity 参照は削除: Azure.Core 1.57.0 が DefaultAzureCredential 等の credential 型を取り込んだため、
          Azure.Identity 1.14.2 を併用すると Azure.Identity.DefaultAzureCredential が二重定義され CS0433 衝突する。
          必要な DefaultAzureCredential は Azure.Core (SDK 経由で 1.57.0 が推移的に解決) から供給される。 -->
@@ -44,7 +44,7 @@
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.10" />
     <PackageReference Include="NAudio" Version="2.3.0" />
-    <PackageReference Include="SIPSorceryMedia.Abstractions" Version="10.0.9" />
+    <PackageReference Include="SIPSorceryMedia.Abstractions" Version="10.0.14" />
     <PackageReference Include="FFMpegCore" Version="5.1.0" />
     <PackageReference Include="CliWrap" Version="3.6.6" />
     <PackageReference Include="Concentus" Version="2.2.2" />

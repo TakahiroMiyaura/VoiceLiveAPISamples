@@ -34,7 +34,7 @@
 		<PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.10" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.10" />
 		<PackageReference Include="NAudio" Version="2.3.0" />
-		<PackageReference Include="SIPSorceryMedia.Abstractions" Version="10.0.9" />
+		<PackageReference Include="SIPSorceryMedia.Abstractions" Version="10.0.14" />
 		<!-- Azure.Identity 参照は削除: Core 経由で解決される Azure.Core 1.57.0 が DefaultAzureCredential を提供し、
 		     Azure.Identity 1.14.2 併用時は Azure.Identity.DefaultAzureCredential が二重定義され CS0433 衝突するため。
 		     使用している TokenRequestContext / AccessToken は元来 Azure.Core の型。 -->

@@ -1,7 +1,8 @@
-// Copyright (c) 2026 Takahiro Miyaura
+﻿// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using Azure.AI.VoiceLive;
@@ -24,6 +25,9 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         private readonly ILogger logger;
 
         private VoiceLiveSession? session;
+        private readonly HashSet<string> answeredCalls = new HashSet<string>();
+        private int pendingToolCalls;
+        private bool responseActive;
         private CancellationTokenSource? eventProcessingCts;
         private Task? eventProcessingTask;
         private bool disposed;
@@ -268,16 +272,48 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                     }
                     break;
 
+                case SessionUpdateResponseCreated responseCreated:
+                    responseActive = true;
+                    break;
+
                 case SessionUpdateResponseDone responseDone:
                     logger.LogTrace("Response done: {response}", responseDone.Response);
+                    responseActive = false;
+                    await RequestToolFollowUpAsync().ConfigureAwait(false);
+                    break;
+
+                case SessionUpdateResponseMcpCallCompleted mcpCompleted:
+                    // The service ran the tool; asking for a response is the client's job.
+                    Interlocked.Increment(ref pendingToolCalls);
+                    await RequestToolFollowUpAsync().ConfigureAwait(false);
+                    break;
+
+                case SessionUpdateResponseFunctionCallArgumentsDone functionCall:
+                    await HandleFunctionCallAsync(functionCall).ConfigureAwait(false);
                     break;
 
                 case SessionUpdateResponseOutputItemDone outputItemDone:
-                    logger.LogTrace("Output item done");
+                    ReportMcpResult(outputItemDone.Item);
                     break;
 
                 case SessionUpdateConversationItemCreated itemCreated:
-                    logger.LogTrace("Conversation item created");
+                    ReportMcpItem(itemCreated.Item);
+                    break;
+
+                case SessionUpdateMcpListToolsCompleted listCompleted:
+                    Console.WriteLine("[MCP] tool discovery finished.");
+                    break;
+
+                case SessionUpdateMcpListToolsFailed listFailed:
+                    Console.WriteLine("[MCP] listing the server's tools failed — none are available this session.");
+                    break;
+
+                case SessionUpdateResponseMcpCallFailed mcpFailed:
+                    Console.WriteLine("[MCP] the tool call failed.");
+
+                    // Still ask for a response, so the model can say so instead of going silent.
+                    Interlocked.Increment(ref pendingToolCalls);
+                    await RequestToolFollowUpAsync().ConfigureAwait(false);
                     break;
 
                 case SessionUpdateAvatarConnecting avatarConnecting:
@@ -296,9 +332,179 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
             }
         }
 
+        /// <summary>
+        ///     Prints what an MCP server contributed, so it is visible whether a tool was actually reached.
+        /// </summary>
+        /// <remarks>
+        ///     MCP tools run on the server, so nothing else in this console would show them. Without this the
+        ///     screen looks identical whether the model used a tool or answered from its own knowledge.
+        /// </remarks>
+        /// <param name="item">The conversation item that was created.</param>
+        private void ReportMcpItem(SessionResponseItem? item)
+        {
+            switch (item)
+            {
+                case SessionResponseMcpListToolItem listed:
+                    var names = new List<string>();
+                    foreach (VoiceLiveMcpTool tool in listed.Tools)
+                    {
+                        names.Add(tool.Name);
+                    }
+
+                    // The item is announced before discovery finishes, so the list is usually still empty
+                    // here. Printing a count at that point would claim the server offers nothing.
+                    Console.WriteLine(names.Count == 0
+                        ? $"[MCP] {listed.ServerLabel}: discovering tools..."
+                        : $"[MCP] {listed.ServerLabel} offers: {string.Join(", ", names)}");
+                    break;
+
+                case SessionResponseMcpCallItem called:
+                    // Arguments and output are still empty at this point; they arrive with the
+                    // matching response.output_item.done, which is where the result is printed.
+                    Console.WriteLine($"[MCP] calling {called.ServerLabel}.{called.Name}...");
+                    break;
+
+                default:
+                    logger.LogTrace("Conversation item created");
+                    break;
+            }
+        }
+
+        /// <summary>
+        ///     Prints the outcome of a finished MCP tool call.
+        /// </summary>
+        /// <remarks>
+        ///     The arguments and the output are only populated once the output item is done, so this is
+        ///     the event that can show what the tool was actually asked and what came back.
+        /// </remarks>
+        /// <param name="item">The output item that completed.</param>
+        private static void ReportMcpResult(SessionResponseItem? item)
+        {
+            if (item is not SessionResponseMcpCallItem call)
+            {
+                return;
+            }
+
+            Console.WriteLine($"[MCP] {call.ServerLabel}.{call.Name}({Summarize(call.Arguments)})");
+            Console.WriteLine(call.Error == null
+                ? $"[MCP] -> {Summarize(call.Output)}"
+                : $"[MCP] -> failed: {call.Error}");
+        }
+
+        /// <summary>
+        ///     Shortens a tool result so one line of console output stays readable.
+        /// </summary>
+        /// <param name="output">The raw tool output.</param>
+        /// <returns>The output, truncated if long.</returns>
+        private static string Summarize(string? output)
+        {
+            if (string.IsNullOrEmpty(output))
+            {
+                return "(empty)";
+            }
+
+            var collapsed = new string(output.Select(c => char.IsControl(c) ? ' ' : c).ToArray());
+            return collapsed.Length <= 200 ? collapsed : collapsed.Substring(0, 200) + "...";
+        }
+
+        /// <summary>
+        ///     Runs a tool the model asked for and returns its result to the conversation.
+        /// </summary>
+        /// <remarks>
+        ///     The follow-up response is not requested here. With parallel tool calls a turn can carry several
+        ///     calls, and asking for a response per call makes the service start one response while another is
+        ///     still open. Every output is sent first, and <see cref="RequestToolFollowUpAsync" /> asks once.
+        /// </remarks>
+        /// <param name="call">The completed function call.</param>
+        /// <returns>A task that completes once the output has been sent.</returns>
+        private async Task HandleFunctionCallAsync(SessionUpdateResponseFunctionCallArgumentsDone call)
+        {
+            if (session == null || call.CallId == null)
+            {
+                return;
+            }
+
+            lock (answeredCalls)
+            {
+                if (!answeredCalls.Add(call.CallId))
+                {
+                    return;
+                }
+            }
+
+            Console.WriteLine($"[Tool] {call.Name}({call.Arguments})");
+            string output = ExecuteTool(call.Name, call.Arguments);
+            Console.WriteLine($"[Tool] -> {output}");
+
+            Interlocked.Increment(ref pendingToolCalls);
+            await session.AddItemAsync(new FunctionCallOutputItem(call.CallId, output)).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        ///     Asks for one response covering every tool output sent during the turn that just finished.
+        /// </summary>
+        /// <returns>A task that completes once the response has been requested, if one was needed.</returns>
+        private async Task RequestToolFollowUpAsync()
+        {
+            // Voice Live rejects a response that overlaps another, and an MCP call completes while the
+            // response that made it may still be open. The pending count is kept until that one is done.
+            if (session == null || responseActive || Volatile.Read(ref pendingToolCalls) == 0)
+            {
+                return;
+            }
+
+            Interlocked.Exchange(ref pendingToolCalls, 0);
+            await session.StartResponseAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>
+        ///     Produces a canned result for the sample tools. Real tools would call a service here.
+        /// </summary>
+        /// <param name="name">The tool name.</param>
+        /// <param name="arguments">The JSON arguments the model produced.</param>
+        /// <returns>The JSON result to hand back to the model.</returns>
+        private string ExecuteTool(string? name, string? arguments)
+        {
+            var location = "the requested location";
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(arguments))
+                {
+                    using JsonDocument parsed = JsonDocument.Parse(arguments);
+                    if (parsed.RootElement.TryGetProperty("location", out JsonElement value))
+                    {
+                        location = value.GetString() ?? location;
+                    }
+                }
+            }
+            catch (JsonException ex)
+            {
+                logger.LogWarning(ex, "Could not parse tool arguments: {arguments}", arguments);
+            }
+
+            switch (name)
+            {
+                case "get_time":
+                    return JsonSerializer.Serialize(new
+                    {
+                        location,
+                        time = DateTime.Now.ToString("HH:mm"),
+                        timezone = TimeZoneInfo.Local.StandardName
+                    });
+                default:
+                    return JsonSerializer.Serialize(new
+                    {
+                        location,
+                        temperature = 22,
+                        unit = "celsius",
+                        condition = "sunny"
+                    });
+            }
+        }
+
         private async Task HandleSessionUpdatedAsync(SessionUpdateSessionUpdated sessionUpdated)
         {
-            if (avatarHandler == null || mode != ConnectionMode.Avatar || session == null)
+            if (avatarHandler == null || session == null)
             {
                 // Non-avatar mode: just start recording
                 audioHandler.StartRecording();
@@ -407,9 +613,9 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
 
         private void HandleAudioDelta(SessionUpdateResponseAudioDelta audioDelta)
         {
-            if (mode == ConnectionMode.Avatar)
+            if (avatarHandler != null)
             {
-                // Avatar mode handles audio through WebRTC
+                // The avatar carries its own audio over WebRTC.
                 return;
             }
 

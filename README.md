@@ -35,9 +35,14 @@ A .NET 10 console application and reusable client library for real-time voice co
 
 This repository contains two console application samples:
 
-**Which one to start with**: if you want the stable feature set with the least machinery, use
-**VoiceLiveSDKConsoleApp**. If you want to see a preview feature exercised on its own, use
+**Which one to start with**: if a feature has reached GA, the SDK expresses it in a few lines — use
+**VoiceLiveSDKConsoleApp**. If it is still in preview, the SDK has no type for it yet, so use
 **VoiceLiveConsoleApp**, which talks to the wire directly and can select `2026-06-01-preview`.
+
+That split moves: a feature tried here against a preview version reaches GA some months later, the SDK
+gains a type for it, and it moves to the SDK sample while the wire sample goes on to the next preview.
+Both samples list their features in one catalog file, so the same feature can be read side by side —
+`SdkFeatureCatalog.cs` against `PreviewFeatureCatalog.cs`.
 
 ### VoiceLiveConsoleApp (Custom WebSocket Implementation)
 
@@ -49,21 +54,39 @@ A console application utilizing "VoiceLiveAPI.Core," a custom WebSocket library 
 
 ### VoiceLiveSDKConsoleApp (Azure.AI.VoiceLive SDK)
 
-A console application that uses the official **Azure.AI.VoiceLive SDK** package, covering the four
-stable patterns: AI Model, AI Agent, and Avatar on either backend.
+A console application that uses the official **Azure.AI.VoiceLive SDK** package. It opens with two
+choices: hold a **conversation** (AI Model, AI Agent, or Avatar on either backend), or exercise one
+**feature** on its own.
 
 - **Official SDK**: Uses Microsoft's official Azure.AI.VoiceLive NuGet package
 - **Simplified API**: `VoiceLiveClient` and `VoiceLiveSession` classes from the SDK
 - **IAsyncEnumerable pattern**: Modern async streaming via `session.GetUpdatesAsync()`
 - **Avatar support**: Uses existing VoiceLiveAPI.Avatars for WebRTC video streaming
+- **Feature menu**: ten GA features, each one entry in `SdkFeatureCatalog.cs`
+
+The feature menu connects at the newest GA wire version, so which version introduced a feature does
+not affect whether you can pick it:
+
+| Feature | What it shows |
+|---------|---------------|
+| Photo avatar | A talking head generated from one still image by `vasa-1` |
+| Photo avatar + scene | Zoom, position, rotation and amplitude — photo avatars only |
+| Avatar with WebSocket video | Frames arriving on the session socket, with no SDP/ICE exchange |
+| `azure-personal` voice | A voice cloned from about 30 seconds of speech |
+| Semantic end-of-utterance detection | Waiting through a natural pause, judged from what was said (multilingual semantic model — not smart turn detection, which is still preview; try that in VoiceLiveConsoleApp) |
+| Auto-truncation on barge-in | The stored response matching what was actually heard |
+| MCP server | Tools hosted remotely, listed and executed by the service |
+| Interim response | Filler speech while a slow tool runs |
+| Parallel tool calls | Two tools answered within one turn |
+| `avatar-sync` voice | A voice trained alongside a custom video avatar |
 
 | Feature | VoiceLiveConsoleApp | VoiceLiveSDKConsoleApp |
 |---------|---------------------|------------------------|
 | WebSocket Implementation | Custom (VoiceLiveAPI.Core) | Azure.AI.VoiceLive SDK |
 | Session Management | VoiceLiveSession (Core) | VoiceLiveSession (SDK) |
 | Message Handling | ServerMessageHandlerManager events | IAsyncEnumerable pattern |
-| API version | up to `2026-06-01-preview` | up to `2026-01-01-preview` (SDK limit) |
-| Preview features | 14, chosen from a menu | — |
+| API version | up to `2026-06-01-preview` | up to `2026-07-15` |
+| Feature menu | 14 preview features | 10 GA features |
 | Avatar Video Streaming | WebRTC and WebSocket | WebRTC |
 | Authentication | API Key / Entra ID | API Key / Entra ID |
 
@@ -90,10 +113,10 @@ PS D:\hoge\VoiceLiveAPISamples > dotnet run --project src/VoiceLiveSDKConsoleApp
 | Microsoft.Extensions.Configuration           | 10.0.10           | Configuration management   |
 | Microsoft.Extensions.Configuration.UserSecrets | 10.0.10        | Secure configuration       |
 | Microsoft.Extensions.Logging                | 10.0.10           | Logging infrastructure     |
-| System.Text.Json                             | 10.0.3          | JSON serialization         |
+| System.Text.Json                             | 10.0.10         | JSON serialization         |
 | NAudio                                       | 2.3.0            | Cross-platform audio      |
-| SIPSorcery                                   | 10.0.9          | WebRTC implementation      |
-| SIPSorceryMedia.Abstractions                | 10.0.9          | Media format abstractions |
+| SIPSorcery                                   | 10.0.14         | WebRTC implementation      |
+| SIPSorceryMedia.Abstractions                | 10.0.14         | Media format abstractions |
 | Concentus                                    | 2.2.2           | Opus audio codec           |
 | FFMpegCore                                   | 5.1.0           | FFmpeg integration         |
 | CliWrap                                      | 3.6.6           | Command line process wrapper |

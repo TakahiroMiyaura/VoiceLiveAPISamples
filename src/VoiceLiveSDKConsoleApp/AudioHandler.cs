@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Takahiro Miyaura
+﻿// Copyright (c) 2026 Takahiro Miyaura
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
@@ -39,6 +39,13 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         ///     Number of audio channels for Avatar mode (Opus).
         /// </summary>
         private const int AvatarChannels = 2;
+
+        /// <summary>
+        ///     How many seconds of assistant audio the playback buffer can hold. Response audio arrives faster
+        ///     than real time, so this must exceed the longest single response; otherwise the overflow is
+        ///     discarded and the answer breaks up mid-sentence.
+        /// </summary>
+        private const int PlaybackBufferSeconds = 120;
 
         #endregion
 
@@ -114,7 +121,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
             // Initialize regular audio provider (24kHz, mono, 16-bit)
             waveProvider = new BufferedWaveProvider(new WaveFormat(SampleRate, BitsPerSample, Channels))
             {
-                BufferLength = SampleRate * Channels * 2 * 10, // 10 seconds buffer
+                BufferLength = PlaybackBufferSeconds * SampleRate * Channels * 2,
                 DiscardOnBufferOverflow = true
             };
 
@@ -124,7 +131,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 avatarWaveProvider =
                     new BufferedWaveProvider(new WaveFormat(AvatarSampleRate, BitsPerSample, AvatarChannels))
                     {
-                        BufferLength = AvatarSampleRate * AvatarChannels * 2 * 10,
+                        BufferLength = PlaybackBufferSeconds * AvatarSampleRate * AvatarChannels * 2,
                         DiscardOnBufferOverflow = true
                     };
 

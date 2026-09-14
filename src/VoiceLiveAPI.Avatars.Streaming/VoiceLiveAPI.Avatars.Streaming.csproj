@@ -13,7 +13,7 @@
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.10" />
     <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="Concentus" Version="2.2.2" />
-    <PackageReference Include="SIPSorceryMedia.Abstractions" Version="10.0.9" />
+    <PackageReference Include="SIPSorceryMedia.Abstractions" Version="10.0.14" />
   </ItemGroup>
 
   <ItemGroup>
