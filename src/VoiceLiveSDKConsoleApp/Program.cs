@@ -2,10 +2,12 @@
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Azure;
 using Azure.AI.VoiceLive;
 using Azure.Identity;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars.Streaming;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -47,22 +49,19 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
 
         private static ILogger? logger;
         private static IDisposable? telemetryListener;
-        private static string azureEndpoint = "<your Azure AI Services Endpoint>";
-        private static string agentProjectName = "<your Azure AI Foundry Project Name>";
-        private static string agentName = "<your Azure AI Agent Name>";
-        private static string agentId = "<your Azure AI Agent Id>";
-        private static string voiceName = "ja-JP-Nanami:DragonHDLatestNeural";
-        private static string modelName = "gpt-4o";
-        private static string avatarBackend = "agent";
+        private static string azureEndpoint = string.Empty;
+        private static string agentProjectName = string.Empty;
+        private static string agentName = string.Empty;
+        private static string voiceName = string.Empty;
+        private static string modelName = string.Empty;
+        private static string avatarBackend = string.Empty;
 
         /// <summary>OpenAI native voice names (used with GPT real-time models), e.g. "marin" / "cedar".</summary>
         private static readonly HashSet<string> OpenAiVoiceNames = new(StringComparer.OrdinalIgnoreCase)
         {
             "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse", "marin", "cedar"
         };
-        private static string azureIdentityTokenRequestUrl = "<Token request url(ex:https://ai.azure.com/.default)>";
-        private static string apiKey = "<Azure AI Foundry API Key>";
-        private static string agentAccessToken = "<Azure AI Foundry API Key>";
+        private static string apiKey = string.Empty;
 
         private static ConnectionMode currentMode;
         private static bool useApiKeyAuth;
@@ -71,6 +70,9 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         private static VoiceLiveAssistant? assistant;
         private static AudioHandler? audioHandler;
         private static AvatarHandler? avatarHandler;
+
+        /// <summary>Renders avatar frames that arrive over the WebSocket; null unless the session asked for that transport.</summary>
+        private static WebSocketAvatarVideoStreamer? webSocketVideo;
 
         /// <summary>The feature chosen from the catalog, when running in <see cref="ConnectionMode.Feature" />.</summary>
         private static SdkFeature? currentFeature;
@@ -82,15 +84,34 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         /// <summary>
         ///     Main entry point of the console application.
         /// </summary>
+        /// <param name="args">Setting overrides (see <c>--help</c>).</param>
         [STAThread]
-        private static async Task Main()
+        private static async Task Main(string[] args)
         {
             Console.OutputEncoding = Encoding.UTF8;
             Console.InputEncoding = Encoding.UTF8;
 
+            IConfigurationRoot config = new ConfigurationBuilder()
+                .AddUserSecrets<Program>()
+                .Build();
+            ConsoleSettings.Initialize(config, args);
+
+            if (ConsoleSettings.HelpRequested())
+            {
+                ConsoleSettings.PrintHelp();
+                return;
+            }
+
+            // Errors only by default, so the conversation stays readable. Raise LogLevel when a feature needs to
+            // be traced (for example whether avatar video streaming actually started).
+            if (!Enum.TryParse(ConsoleSettings.Get("LogLevel"), true, out LogLevel minimumLevel))
+            {
+                minimumLevel = LogLevel.Error;
+            }
+
             ILoggerFactory loggerFactory = LoggerFactory.Create(configure =>
             {
-                configure.SetMinimumLevel(LogLevel.Error);
+                configure.SetMinimumLevel(minimumLevel);
                 configure.AddSimpleConsole(options =>
                 {
                     options.IncludeScopes = true;
@@ -101,38 +122,27 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
 
             logger = loggerFactory.CreateLogger<Program>();
 
-            // Subscribe to the SDK's OpenTelemetry tracing (beta.4) to surface token usage / latency.
-            telemetryListener = VoiceLiveTelemetry.Enable(logger);
+            // The SDK's OpenTelemetry spans (token usage, latency) print one line per event, so they are opt-in.
+            if (ConsoleSettings.GetFlag("OpenTelemetry"))
+            {
+                telemetryListener = VoiceLiveTelemetry.Enable(logger);
+            }
 
-            IConfigurationRoot config = new ConfigurationBuilder()
-                .AddUserSecrets<Program>()
-                .Build();
+            // The environment variables are the ones the integration tests read, so one setup serves both.
+            azureEndpoint = ConsoleSettings.Get("Endpoint") ?? string.Empty;
+            apiKey = ConsoleSettings.Get("ApiKey") ?? string.Empty;
+            agentName = ConsoleSettings.Get("AgentName") ?? string.Empty;
+            agentProjectName = ConsoleSettings.Get("AgentProjectName") ?? string.Empty;
+            voiceName = ConsoleSettings.Get("Voice") ?? string.Empty;
+            modelName = ConsoleSettings.Get("Model") ?? string.Empty;
+            avatarBackend = ConsoleSettings.Get("AvatarBackend") ?? string.Empty;
 
-            azureIdentityTokenRequestUrl = config["Identity:AzureEndpoint"] ?? azureIdentityTokenRequestUrl;
-            azureEndpoint = config["VoiceLiveAPI:AzureEndpoint"] ?? azureEndpoint;
-            apiKey = config["AzureAIFoundry:ApiKey"] ?? apiKey;
-            agentProjectName = config["AzureAIFoundry:AgentProjectName"] ?? agentProjectName;
-            agentName = config["AzureAIFoundry:AgentName"] ?? agentName;
-            agentId = config["AzureAIFoundry:AgentId"] ?? agentId;
-            voiceName = config["VoiceLiveAPI:Voice"] ?? voiceName;
-            agentAccessToken = config["AzureAIFoundry:AgentAccessToken"] ?? agentAccessToken;
-
-            // Environment-variable overrides (shared with the integration tests) take precedence over
-            // user-secrets, so the same env setup used for tests also works for the console.
-            modelName = config["VoiceLiveAPI:Model"] ?? modelName;
-            azureEndpoint = Environment.GetEnvironmentVariable("VOICELIVE_ENDPOINT") ?? azureEndpoint;
-            apiKey = Environment.GetEnvironmentVariable("VOICELIVE_APIKEY") ?? apiKey;
-            agentName = Environment.GetEnvironmentVariable("VOICELIVE_AGENT_NAME") ?? agentName;
-            agentProjectName = Environment.GetEnvironmentVariable("VOICELIVE_AGENT_PROJECT") ?? agentProjectName;
-            voiceName = Environment.GetEnvironmentVariable("VOICELIVE_VOICE") ?? voiceName;
-            modelName = Environment.GetEnvironmentVariable("VOICELIVE_MODEL") ?? modelName;
-            avatarBackend = Environment.GetEnvironmentVariable("VOICELIVE_AVATAR_BACKEND") ?? avatarBackend;
-
-            if (string.IsNullOrWhiteSpace(azureEndpoint) || !Uri.IsWellFormedUriString(azureEndpoint, UriKind.Absolute))
+            if (!Uri.IsWellFormedUriString(azureEndpoint, UriKind.Absolute))
             {
                 Console.WriteLine("[Config] Voice Live endpoint is not configured.");
-                Console.WriteLine("  Set env VOICELIVE_ENDPOINT, or user-secret 'VoiceLiveAPI:AzureEndpoint'");
+                Console.WriteLine($"  Set it with: {ConsoleSettings.DescribeSources("Endpoint")}");
                 Console.WriteLine("  e.g. https://<your-resource>.cognitiveservices.azure.com");
+                Console.WriteLine("  Run with --help to list every setting.");
                 return;
             }
 
@@ -145,25 +155,12 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 currentMode = ChooseConnectionMode();
                 InitializeClient();
 
-                audioHandler = new AudioHandler(logger);
-                audioHandler.Initialize(UsesAvatar(currentMode));
-
-                if (UsesAvatar(currentMode))
-                {
-                    avatarHandler = new AvatarHandler(logger);
-                    avatarHandler.Initialize();
-                }
+                var (model, sessionOptions) = CreateSessionOptions(currentMode);
+                InitializeMedia(sessionOptions);
 
                 Console.WriteLine($"Connecting to Azure VoiceLive API in {currentMode} mode...");
 
-                var (model, sessionOptions) = CreateSessionOptions(currentMode);
-
-                assistant = new VoiceLiveAssistant(
-                    voiceLiveClient!,
-                    audioHandler,
-                    avatarHandler,
-                    currentMode,
-                    logger);
+                assistant = CreateAssistant();
 
                 await assistant.StartAsync(
                     BuildSessionTarget(currentMode, model),
@@ -429,7 +426,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         ///     Prompts for the session backend used underneath Avatar output and stores it in
         ///     <see cref="avatarBackend" />. Agent (default) manages the conversation server-side; Model runs
         ///     on a direct model session, which enables model-only features such as image input.
-        ///     The environment variable <c>VOICELIVE_AVATAR_BACKEND</c> supplies the default selection.
+        ///     The <c>AvatarBackend</c> setting supplies the default selection.
         /// </summary>
         private static void ChooseAvatarBackend()
         {
@@ -518,7 +515,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         /// <remarks>
         ///     SDK 1.2.0 added two GA wire versions, <c>2026-04-10</c> and <c>2026-07-15</c>, and much of what
         ///     used to be preview-only ships in them. The defaults above are unchanged so behavior stays the
-        ///     same, but <c>VOICELIVE_SDK_SERVICE_VERSION</c> selects another one — pass the enum name
+        ///     same, but the <c>ServiceVersion</c> setting selects another one — pass the enum name
         ///     (<c>V2026_07_15</c>) or the wire version (<c>2026-07-15</c>).
         /// </remarks>
         /// <param name="mode">The connection mode the client will be used for.</param>
@@ -530,7 +527,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 : mode == ConnectionMode.AIModel ? VoiceLiveClientOptions.ServiceVersion.V2025_10_01
                 : VoiceLiveClientOptions.ServiceVersion.V2026_01_01_PREVIEW;
 
-            string? requested = Environment.GetEnvironmentVariable("VOICELIVE_SDK_SERVICE_VERSION");
+            string? requested = ConsoleSettings.Get("ServiceVersion");
             if (!string.IsNullOrWhiteSpace(requested))
             {
                 string wanted = requested.Trim().Replace("-", "_");
@@ -584,7 +581,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         /// <summary>
         ///     Whether the given mode connects as a Foundry agent session (Entra ID required, conversation
         ///     managed server-side). Avatar defaults to an agent backend, but runs on a model session when
-        ///     <c>VOICELIVE_AVATAR_BACKEND=model</c> — which enables model-only features such as image input.
+        ///     <c>AvatarBackend=model</c> — which enables model-only features such as image input.
         /// </summary>
         /// <param name="mode">The connection mode.</param>
         /// <returns><c>true</c> for an agent-backed session; otherwise <c>false</c>.</returns>
@@ -604,6 +601,87 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         {
             return mode == ConnectionMode.Avatar
                    || (mode == ConnectionMode.Feature && currentFeature?.Kind == SdkFeatureKind.AvatarSession);
+        }
+
+        /// <summary>
+        ///     Prepares audio and the avatar receiver for the session about to start.
+        /// </summary>
+        /// <remarks>
+        ///     The avatar transport is read from the options that will actually be sent, so the receiving side
+        ///     cannot disagree with what the service was asked for. Both transports deliver the reply audio
+        ///     inside the avatar media, but in different forms: a WebRTC avatar as an Opus track decoded here
+        ///     into a 48 kHz stereo buffer, WebSocket video as an AAC track muxed into the same fragmented MP4
+        ///     as the frames, which ffplay plays itself. Only the WebRTC case needs the avatar audio buffer.
+        /// </remarks>
+        /// <param name="options">The session options for the session about to start.</param>
+        [MemberNotNull(nameof(audioHandler))]
+        private static void InitializeMedia(VoiceLiveSessionOptions options)
+        {
+            bool viaWebSocket = options.Avatar?.OutputProtocol == AvatarOutputProtocol.Websocket;
+            bool viaWebRtc = options.Avatar != null && !viaWebSocket;
+
+            audioHandler = new AudioHandler(logger!);
+            audioHandler.Initialize(viaWebRtc);
+
+            if (viaWebRtc)
+            {
+                avatarHandler = new AvatarHandler(logger!);
+                avatarHandler.Initialize();
+            }
+            else if (viaWebSocket)
+            {
+                webSocketVideo = StartWebSocketVideo();
+            }
+        }
+
+        /// <summary>
+        ///     Starts the ffplay window that WebSocket avatar frames are written into.
+        /// </summary>
+        /// <returns>The running streamer.</returns>
+        private static WebSocketAvatarVideoStreamer StartWebSocketVideo()
+        {
+            // The same shared streamer the wire console uses: once the frame bytes are out of the event,
+            // rendering does not care which client received them.
+            var streamer = new WebSocketAvatarVideoStreamer(logger!);
+            if (!streamer.Start())
+            {
+                Console.WriteLine("Could not start the WebSocket avatar video window (is ffplay on PATH?).");
+            }
+
+            return streamer;
+        }
+
+        /// <summary>
+        ///     Creates the assistant for the session about to start, from the client, the media prepared by
+        ///     <see cref="InitializeMedia" /> and the behaviour the chosen feature asks for.
+        /// </summary>
+        /// <returns>The assistant, not yet started.</returns>
+        private static VoiceLiveAssistant CreateAssistant()
+        {
+            return new VoiceLiveAssistant(
+                voiceLiveClient!,
+                audioHandler!,
+                avatarHandler,
+                webSocketVideo,
+                currentMode,
+                logger!,
+                currentFeature?.KeepMicOpen == true,
+                currentFeature?.ToolDelay ?? TimeSpan.Zero);
+        }
+
+        /// <summary>
+        ///     Stops and releases the audio devices and whichever avatar receiver was in use.
+        /// </summary>
+        private static void ReleaseMedia()
+        {
+            avatarHandler?.Dispose();
+            avatarHandler = null;
+
+            webSocketVideo?.Dispose();
+            webSocketVideo = null;
+
+            audioHandler?.Dispose();
+            audioHandler = null;
         }
 
         /// <summary>
@@ -661,35 +739,18 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                     assistant = null;
                 }
 
-                avatarHandler?.Dispose();
-                avatarHandler = null;
-
-                audioHandler?.Dispose();
-                audioHandler = null;
+                ReleaseMedia();
 
                 // Choose new mode
                 currentMode = ChooseConnectionMode();
                 InitializeClient();
 
-                // Reinitialize
-                audioHandler = new AudioHandler(logger!);
-                audioHandler.Initialize(currentMode == ConnectionMode.Avatar);
-
-                if (currentMode == ConnectionMode.Avatar)
-                {
-                    avatarHandler = new AvatarHandler(logger!);
-                    avatarHandler.Initialize();
-                }
+                var (model, sessionOptions) = CreateSessionOptions(currentMode);
+                InitializeMedia(sessionOptions);
 
                 Console.WriteLine($"Reconnecting in {currentMode} mode...");
-                var (model, sessionOptions) = CreateSessionOptions(currentMode);
 
-                assistant = new VoiceLiveAssistant(
-                    voiceLiveClient!,
-                    audioHandler,
-                    avatarHandler,
-                    currentMode,
-                    logger!);
+                assistant = CreateAssistant();
 
                 await assistant.StartAsync(
                     BuildSessionTarget(currentMode, model),
@@ -820,12 +881,15 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 Console.WriteLine($"Reconnecting in {currentMode} mode...");
                 var (model, sessionOptions) = CreateSessionOptions(currentMode);
 
-                assistant = new VoiceLiveAssistant(
-                    voiceLiveClient,
-                    audioHandler!,
-                    avatarHandler,
-                    currentMode,
-                    logger!);
+                // A new session starts its video with a fresh initialization segment (ftyp/moov), which
+                // cannot be appended to the stream the old ffplay is already decoding.
+                if (webSocketVideo != null)
+                {
+                    webSocketVideo.Dispose();
+                    webSocketVideo = StartWebSocketVideo();
+                }
+
+                assistant = CreateAssistant();
 
                 await assistant.StartAsync(
                     BuildSessionTarget(currentMode, model),
@@ -852,11 +916,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 assistant = null;
             }
 
-            avatarHandler?.Dispose();
-            avatarHandler = null;
-
-            audioHandler?.Dispose();
-            audioHandler = null;
+            ReleaseMedia();
 
             voiceLiveClient = null;
 

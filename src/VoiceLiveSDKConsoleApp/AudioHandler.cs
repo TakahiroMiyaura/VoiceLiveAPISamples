@@ -174,6 +174,22 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         }
 
         /// <summary>
+        ///     Discards the assistant audio that is queued but not yet played (barge-in).
+        /// </summary>
+        /// <returns>How much audio was discarded.</returns>
+        public TimeSpan ClearPlayback()
+        {
+            if (waveProvider == null) return TimeSpan.Zero;
+
+            lock (waveProvider)
+            {
+                TimeSpan discarded = waveProvider.BufferedDuration;
+                waveProvider.ClearBuffer();
+                return discarded;
+            }
+        }
+
+        /// <summary>
         ///     Starts recording from the microphone.
         /// </summary>
         public void StartRecording()

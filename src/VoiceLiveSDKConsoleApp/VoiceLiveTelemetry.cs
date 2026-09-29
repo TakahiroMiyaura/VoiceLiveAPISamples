@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
 {
     /// <summary>
-    ///     Subscribes to the Azure.AI.VoiceLive SDK's OpenTelemetry distributed tracing (beta.4) and
+    ///     Subscribes to the Azure.AI.VoiceLive SDK's OpenTelemetry distributed tracing and
     ///     surfaces per-operation diagnostics (token usage, latency, turn/interruption counts, etc.).
     /// </summary>
     /// <remarks>
@@ -33,7 +33,8 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
 
         /// <summary>
         ///     Registers an <see cref="ActivityListener" /> for the Voice Live SDK's tracing source.
-        ///     Completed spans are written to the console (always visible) and traced via the logger.
+        ///     Completed spans are written to the console and traced via the logger. The console enables
+        ///     this only when <c>VOICELIVE_OTEL</c> is set.
         /// </summary>
         /// <param name="logger">The logger used for detailed (trace-level) output.</param>
         /// <returns>The registered listener; dispose it to stop listening.</returns>

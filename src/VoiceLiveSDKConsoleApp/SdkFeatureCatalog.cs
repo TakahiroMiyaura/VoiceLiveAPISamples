@@ -27,6 +27,13 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
     /// </summary>
     public sealed class SdkFeature
     {
+        #region Private Fields
+
+        /// <summary>Resolves <see cref="ToolDelay" /> when it is read, or null for no delay.</summary>
+        private readonly Func<TimeSpan>? toolDelaySource;
+
+        #endregion
+
         #region Properties
 
         /// <summary>Gets the stable identifier.</summary>
@@ -44,6 +51,20 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         /// <summary>Gets the kind of session this feature runs in.</summary>
         public SdkFeatureKind Kind { get; }
 
+        /// <summary>
+        ///     Gets a value indicating whether the microphone must stay on when the VAD reports that speech
+        ///     stopped. A feature that decides for itself where the turn ends cannot be tried if the client
+        ///     closes the microphone at the first pause.
+        /// </summary>
+        public bool KeepMicOpen { get; }
+
+        /// <summary>
+        ///     Gets how long the sample tools wait before returning. Zero for most features; a feature that
+        ///     reacts to a slow tool needs the tool to be slow enough to be seen. It is read when the session
+        ///     starts, so it reflects the settings rather than whatever was known when the catalog was built.
+        /// </summary>
+        public TimeSpan ToolDelay => toolDelaySource?.Invoke() ?? TimeSpan.Zero;
+
         #endregion
 
         #region Constructors
@@ -56,14 +77,19 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         /// <param name="apply">Applies the feature's configuration.</param>
         /// <param name="hintLines">Lines explaining how to exercise it.</param>
         /// <param name="kind">The kind of session it runs in.</param>
+        /// <param name="keepMicOpen">Whether to keep recording through the VAD's speech-stopped event.</param>
+        /// <param name="toolDelay">Resolves how long the sample tools wait before returning.</param>
         public SdkFeature(string id, string title, Action<VoiceLiveSessionOptions> apply, string[] hintLines,
-            SdkFeatureKind kind = SdkFeatureKind.ModelSession)
+            SdkFeatureKind kind = SdkFeatureKind.ModelSession, bool keepMicOpen = false,
+            Func<TimeSpan>? toolDelay = null)
         {
             Id = id;
             Title = title;
             Apply = apply ?? (_ => { });
             HintLines = hintLines ?? Array.Empty<string>();
             Kind = kind;
+            KeepMicOpen = keepMicOpen;
+            toolDelaySource = toolDelay;
         }
 
         #endregion
@@ -113,14 +139,8 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 {
                     // A photo avatar is already a head shot, so unlike the video avatar it needs no crop and
                     // takes no style — the standard talking heads have none. It does need its base model.
-                    string character = Environment.GetEnvironmentVariable("VOICELIVE_PHOTO_AVATAR_CHARACTER")?.Trim()
-                                       ?? string.Empty;
-                    if (character.Length == 0)
-                    {
-                        character = "sakura";
-                    }
-
-                    bool customized = Environment.GetEnvironmentVariable("VOICELIVE_PHOTO_AVATAR_CUSTOMIZED") == "1"
+                    string character = ConsoleSettings.Get("PhotoAvatarCharacter") ?? "sakura";
+                    bool customized = ConsoleSettings.GetFlag("PhotoAvatarCustomized")
                                       || !StandardTalkingHeads.Contains(character.ToLowerInvariant());
 
                     Console.WriteLine($"Photo avatar: character '{character}'"
@@ -141,7 +161,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 new[]
                 {
                     "  - A still portrait animated by vasa-1, rather than a pre-rendered character.",
-                    "  - VOICELIVE_PHOTO_AVATAR_CHARACTER picks the talking head (default 'sakura'); a name",
+                    "  - --photo-avatar picks the talking head (default 'sakura'); a name",
                     "    that is not one of the 30 standard heads is sent as a custom avatar automatically.",
                     "  - No crop and no style: the frame is already a head shot and the standard heads have",
                     "    no styles. video.resolution is not honored either — frames keep the portrait's ratio.",
@@ -157,18 +177,23 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                     ApplyPhotoAvatar(options);
                     options.Avatar!.Scene = new SceneParams
                     {
-                        Zoom = 1.2f,
-                        PositionX = 0.0f,
-                        PositionY = 0.05f,
-                        Amplitude = 0.8f
+                        Zoom = ConsoleSettings.GetNumber("SceneZoom"),
+                        PositionX = ConsoleSettings.GetNumber("ScenePositionX"),
+                        PositionY = ConsoleSettings.GetNumber("ScenePositionY"),
+                        Amplitude = ConsoleSettings.GetNumber("SceneAmplitude")
                     };
                 },
                 new[]
                 {
                     "  - scene is photo-avatar only; the video avatar ignores it.",
-                    "  - zoom 1.0 = 100%; position/rotation are offsets around centre; amplitude below 1",
+                    "  - zoom 1.0 = 100% (the default). Only values below 1 have an effect (zoom out):",
+                    "    2.0 looked the same as 1.0 on a real run, although the SDK docs give (0, +inf).",
+                    "    The Speech real-time avatar docs give 0 to 1, which matches what is seen.",
+                    "  - position/rotation are offsets around centre; amplitude below 1",
                     "    damps head movement.",
-                    "  - Values here (zoom 1.2, slight rise, amplitude 0.8) frame the head a little closer."
+                    "  - positionY > 0 moves the avatar down (the SDK docs: negative up, positive down).",
+                    "  - Values here: zoom 0.8, positionY 0.05, amplitude 0.8 (head a little smaller and lower).",
+                    "    Override with --scene-zoom / --scene-position-x / --scene-position-y / --scene-amplitude."
                 },
                 SdkFeatureKind.AvatarSession),
 
@@ -183,9 +208,12 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 new[]
                 {
                     "  - output_protocol=websocket, so video arrives as response.video.delta on the same",
-                    "    socket — no WebRTC negotiation at all.",
-                    "  - The frames are fragmented MP4 (ftyp/moov then moof/mdat), not a raw H.264 stream.",
-                    "  - Audio stays on the standard PCM path."
+                    "    socket — no WebRTC negotiation at all (no session.avatar.connect is sent).",
+                    "  - The frames are fragmented MP4 (an initialization segment, then fragments), not a raw",
+                    "    H.264 stream, so they go to ffplay as they are.",
+                    "  - Video and audio arrive as one stream: the fMP4 carries an H.264 track and an AAC track,",
+                    "    and ffplay plays both. No response.audio.delta is sent, so lips and voice stay in step.",
+                    "  - Rendering uses the same shared WebSocketAvatarVideoStreamer as VoiceLiveConsoleApp."
                 },
                 SdkFeatureKind.AvatarSession),
 
@@ -194,18 +222,19 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 "azure-personal voice (requires a provisioned personal voice)",
                 options =>
                 {
-                    string? name = Environment.GetEnvironmentVariable("VOICELIVE_PERSONAL_VOICE");
+                    string? name = ConsoleSettings.Get("PersonalVoice");
                     if (string.IsNullOrWhiteSpace(name))
                     {
-                        Console.WriteLine("VOICELIVE_PERSONAL_VOICE is not set — the default voice is used.");
+                        Console.WriteLine($"PersonalVoice is not set ({ConsoleSettings.DescribeSources("PersonalVoice")}) — the default voice is used.");
                         return;
                     }
 
+                    Console.WriteLine($"Personal voice: speaker profile {name}");
                     options.Voice = new AzurePersonalVoice(name, PersonalVoiceModels.DragonLatestNeural);
                 },
                 new[]
                 {
-                    "  - Set VOICELIVE_PERSONAL_VOICE to the SPEAKER PROFILE ID (a GUID).",
+                    "  - Set PersonalVoice (--personal-voice) to the SPEAKER PROFILE ID (a GUID).",
                     "  - IMPORTANT: it is not the voice name, and not the 'Profile ID' the portal displays.",
                     "    Both of those fail with \"you don't have access to this personalVoiceName\".",
                     "    The working GUID appears only in the URL of the personal voice page in the portal.",
@@ -242,8 +271,11 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                     "    end_of_utterance_detection — it is not a top-level turn_detection type.",
                     "  - This is not smart turn detection (smart_end_of_turn_detection). That model is still",
                     "    preview — even in the GA 2026-07-15 — so the SDK has no type for it. Try it in",
-                    "    VoiceLiveConsoleApp under 2026-06-01-preview."
-                }),
+                    "    VoiceLiveConsoleApp under 2026-06-01-preview.",
+                    "  - The microphone stays on through the VAD's speech-stopped event, so press 'R' to stop",
+                    "    recording. Auto-stopping there would close the mic at the pause the model should judge."
+                },
+                keepMicOpen: true),
 
             new SdkFeature(
                 "auto_truncate",
@@ -261,21 +293,20 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 },
                 new[]
                 {
-                    "  - Ask for a long answer, then interrupt it half way through.",
-                    "  - The service truncates the stored response to what was actually played and sends",
-                    "    conversation.item.truncated; without it the transcript keeps audio you never heard."
-                }),
+                    "  - Ask for a long answer, then interrupt it half way through. The microphone stays on",
+                    "    through the reply here (press 'R' to stop it), so you can talk over it.",
+                    "  - On barge-in the console drops the unplayed audio ([Barge-in]); the service truncates",
+                    "    the stored reply to what was heard and sends conversation.item.truncated ([Truncated]).",
+                    "  - Without auto_truncate the transcript would keep the part of the answer you never heard."
+                },
+                keepMicOpen: true),
 
             new SdkFeature(
                 "mcp_tool",
                 "MCP server (tools hosted remotely, called and executed server-side)",
                 options =>
                 {
-                    string url = Environment.GetEnvironmentVariable("VOICELIVE_MCP_URL")?.Trim() ?? string.Empty;
-                    if (url.Length == 0)
-                    {
-                        url = "https://mcp.deepwiki.com/mcp";
-                    }
+                    string url = ConsoleSettings.Get("McpUrl") ?? "https://mcp.deepwiki.com/mcp";
 
                     Console.WriteLine($"MCP server: {url}");
 
@@ -299,7 +330,7 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 {
                     "  - The tools live on an MCP server, so nothing runs on this machine: the service lists",
                     "    them, calls them and feeds the results back into the answer.",
-                    "  - Default server is deepwiki; VOICELIVE_MCP_URL points somewhere else.",
+                    "  - Default server is deepwiki; --mcp-url points somewhere else.",
                     "  - Name a repository as owner/repo — \"What is microsoft/semantic-kernel for?\" — since",
                     "    deepwiki looks repositories up by that form.",
                     "  - Watch for the [MCP] lines: one lists the server's tools, and one per call shows the",
@@ -314,14 +345,15 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
 
             new SdkFeature(
                 "interim_response",
-                "Interim response (filler speech while a slow tool runs)",
+                "Interim response (filler spoken in the turn that calls a tool)",
                 options =>
                 {
                     options.Tools.Add(BuildWeatherTool());
                     var interim = new LlmInterimResponseConfig
                     {
                         Triggers = { InterimResponseTrigger.Tool, InterimResponseTrigger.Latency },
-                        LatencyThreshold = TimeSpan.FromMilliseconds(500),
+                        LatencyThreshold = TimeSpan.FromMilliseconds(ConsoleSettings.GetNumber("InterimLatencyMs")),
+                        Model = "gpt-4.1-mini",
                         Instructions = "Say a short, natural filler in the user's language while you wait.",
                         MaxCompletionTokens = 50
                     };
@@ -332,11 +364,15 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 },
                 new[]
                 {
-                    "  - Bridges the silence while a tool runs or the model is slow to start.",
+                    "  - Speaks a short filler in the response that calls a tool, before the real answer.",
                     "  - 'llm' generates the filler; StaticInterimResponseConfig would read from a fixed list.",
                     "  - Cascaded sessions only (a text model plus an Azure voice).",
-                    "  - Ask for the weather: the filler comes first, then the real answer."
-                }),
+                    "  - Ask for the weather: the filler (an 'interim_...' item) comes in the same response as the",
+                    "    tool call, then the real answer in the next one.",
+                    "  - The filler is only spoken when the tool output arrives while that response is still",
+                    "    open. A tool slower than that gets no filler at all: try --tool-delay-ms 2000."
+                },
+                toolDelay: () => TimeSpan.FromMilliseconds(ConsoleSettings.GetNumber("ToolDelayMs"))),
 
             new SdkFeature(
                 "parallel_tool_calls",
@@ -360,24 +396,33 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 "avatar-sync voice (a voice trained alongside a custom video avatar)",
                 options =>
                 {
-                    string? name = Environment.GetEnvironmentVariable("VOICELIVE_AVATAR_SYNC_VOICE");
+                    string? name = ConsoleSettings.Get("AvatarSyncAvatar");
                     if (string.IsNullOrWhiteSpace(name))
                     {
-                        Console.WriteLine("VOICELIVE_AVATAR_SYNC_VOICE is not set — the default voice is used.");
+                        Console.WriteLine($"AvatarSyncAvatar is not set ({ConsoleSettings.DescribeSources("AvatarSyncAvatar")}) — the default voice is used.");
                         return;
                     }
 
                     ApplyVideoAvatar(options);
                     options.Avatar!.Character = name;
                     options.Avatar.Customized = true;
-                    options.Avatar.Style = null;
-                    options.Voice = new AzureAvatarSyncVoice(name);
+                    options.Avatar.Style = ConsoleSettings.Get("AvatarSyncStyle");
+
+                    // The voice has no name of its own: the service takes it from the custom avatar above. What
+                    // the constructor wants is the base model. It also accepts a string (PersonalVoiceModels
+                    // converts implicitly), so passing the avatar name here compiles and sends it as the model.
+                    options.Voice = new AzureAvatarSyncVoice(
+                        ConsoleSettings.Get("AvatarSyncVoiceModel") ?? PersonalVoiceModels.DragonHDOmniLatestNeural);
+                    Console.WriteLine($"avatar-sync voice: custom avatar '{options.Avatar.Character}', model "
+                                      + ((AzureAvatarSyncVoice)options.Voice).Model);
                 },
                 new[]
                 {
                     "  - Only for a CUSTOM VIDEO avatar: the voice is trained from the same recording as the",
                     "    avatar, so the face and the voice come from one person.",
-                    "  - Set VOICELIVE_AVATAR_SYNC_VOICE to your custom avatar's name.",
+                    "  - Set --avatar-sync to your custom avatar's name (not an ID). The voice has no name of",
+                    "    its own; --avatar-sync-model picks the base model (default DragonHDOmniLatestNeural)",
+                    "    and --avatar-sync-style an avatar style.",
                     "  - Photo avatars cannot use it — pair them with a personal voice instead, which needs",
                     "    one photo and about thirty seconds of audio rather than ten minutes of studio video."
                 },

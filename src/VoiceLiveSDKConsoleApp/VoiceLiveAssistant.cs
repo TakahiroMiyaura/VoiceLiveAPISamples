@@ -2,11 +2,13 @@
 // Released under the Boost Software License 1.0
 // https://opensource.org/license/bsl-1-0
 
+using System.ClientModel.Primitives;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
 using Azure.AI.VoiceLive;
 using Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars;
+using Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars.Streaming;
 using Microsoft.Extensions.Logging;
 
 namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
@@ -21,13 +23,19 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         private readonly VoiceLiveClient client;
         private readonly AudioHandler audioHandler;
         private readonly AvatarHandler? avatarHandler;
+        private readonly WebSocketAvatarVideoStreamer? webSocketVideo;
+        private readonly bool keepMicOpen;
+        private readonly TimeSpan toolDelay;
         private readonly ConnectionMode mode;
         private readonly ILogger logger;
 
         private VoiceLiveSession? session;
         private readonly HashSet<string> answeredCalls = new HashSet<string>();
         private int pendingToolCalls;
-        private bool responseActive;
+        private int toolsInFlight;
+        private volatile bool responseActive;
+        private string? playingResponseId;
+        private string? interruptedResponseId;
         private CancellationTokenSource? eventProcessingCts;
         private Task? eventProcessingTask;
         private bool disposed;
@@ -50,21 +58,30 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         /// </summary>
         /// <param name="client">The VoiceLive SDK client.</param>
         /// <param name="audioHandler">The audio handler for input/output.</param>
-        /// <param name="avatarHandler">The avatar handler (null if not in Avatar mode).</param>
+        /// <param name="avatarHandler">The WebRTC avatar handler (null unless the avatar streams over WebRTC).</param>
+        /// <param name="webSocketVideo">The renderer for avatar frames sent over the WebSocket (null unless that transport is in use).</param>
         /// <param name="mode">The connection mode.</param>
         /// <param name="logger">The logger instance.</param>
+        /// <param name="keepMicOpen">Whether to keep recording through the VAD's speech-stopped event.</param>
+        /// <param name="toolDelay">How long the sample tools wait before returning (zero runs them inline).</param>
         public VoiceLiveAssistant(
             VoiceLiveClient client,
             AudioHandler audioHandler,
             AvatarHandler? avatarHandler,
+            WebSocketAvatarVideoStreamer? webSocketVideo,
             ConnectionMode mode,
-            ILogger logger)
+            ILogger logger,
+            bool keepMicOpen = false,
+            TimeSpan toolDelay = default)
         {
             this.client = client ?? throw new ArgumentNullException(nameof(client));
             this.audioHandler = audioHandler ?? throw new ArgumentNullException(nameof(audioHandler));
             this.avatarHandler = avatarHandler;
+            this.webSocketVideo = webSocketVideo;
             this.mode = mode;
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.keepMicOpen = keepMicOpen;
+            this.toolDelay = toolDelay;
         }
 
         #endregion
@@ -252,6 +269,18 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                     HandleAudioDelta(audioDelta);
                     break;
 
+                case ServerEventResponseVideoDelta videoDelta:
+                    HandleVideoDelta(videoDelta);
+                    break;
+
+                case ServerEventSessionAvatarSwitchToSpeaking speaking:
+                    logger.LogTrace("Avatar switch_to_speaking (turn {turnId})", speaking.TurnId);
+                    break;
+
+                case ServerEventSessionAvatarSwitchToIdle idle:
+                    logger.LogTrace("Avatar switch_to_idle (turn {turnId})", idle.TurnId);
+                    break;
+
                 case SessionUpdateResponseAudioTranscriptDelta transcriptDelta:
                     logger.LogTrace("Transcript delta: {delta}", transcriptDelta.Delta);
                     break;
@@ -262,11 +291,21 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
 
                 case SessionUpdateInputAudioBufferSpeechStarted speechStarted:
                     logger.LogTrace("Speech started");
+                    InterruptPlayback();
+                    break;
+
+                case SessionUpdateConversationItemTruncated truncated:
+                    // Sent with auto_truncate: the stored reply is cut to what the service reckons was heard.
+                    Console.WriteLine($"[Truncated] item {truncated.ItemId} kept up to {truncated.AudioEnd.TotalMilliseconds:0} ms");
                     break;
 
                 case SessionUpdateInputAudioBufferSpeechStopped speechStopped:
                     logger.LogTrace("Speech stopped (audio_end: {ms}ms)", speechStopped.AudioEnd);
-                    if (audioHandler.IsRecording)
+
+                    // A feature that decides for itself where the turn ends (semantic end-of-utterance) must
+                    // keep the microphone open here: closing it at the VAD's first pause is exactly the
+                    // behaviour the model is meant to replace.
+                    if (audioHandler.IsRecording && !keepMicOpen)
                     {
                         audioHandler.StopRecording();
                     }
@@ -289,7 +328,17 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                     break;
 
                 case SessionUpdateResponseFunctionCallArgumentsDone functionCall:
-                    await HandleFunctionCallAsync(functionCall).ConfigureAwait(false);
+                    if (toolDelay > TimeSpan.Zero)
+                    {
+                        // A slow tool must not hold up the event loop: what happens meanwhile (the interim
+                        // response's audio, response.done) is exactly what the delay is there to show.
+                        _ = RunSlowToolAsync(functionCall);
+                    }
+                    else
+                    {
+                        await HandleFunctionCallAsync(functionCall).ConfigureAwait(false);
+                    }
+
                     break;
 
                 case SessionUpdateResponseOutputItemDone outputItemDone:
@@ -432,12 +481,47 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 }
             }
 
-            Console.WriteLine($"[Tool] {call.Name}({call.Arguments})");
-            string output = ExecuteTool(call.Name, call.Arguments);
-            Console.WriteLine($"[Tool] -> {output}");
+            Interlocked.Increment(ref toolsInFlight);
+            try
+            {
+                Console.WriteLine($"[Tool] {call.Name}({call.Arguments})");
+                if (toolDelay > TimeSpan.Zero)
+                {
+                    Console.WriteLine($"[Tool] (waiting {toolDelay.TotalSeconds:0.#} s to simulate a slow tool)");
+                    await Task.Delay(toolDelay).ConfigureAwait(false);
+                }
 
-            Interlocked.Increment(ref pendingToolCalls);
-            await session.AddItemAsync(new FunctionCallOutputItem(call.CallId, output)).ConfigureAwait(false);
+                string output = ExecuteTool(call.Name, call.Arguments);
+                Console.WriteLine($"[Tool] -> {output}");
+
+                Interlocked.Increment(ref pendingToolCalls);
+                await session.AddItemAsync(new FunctionCallOutputItem(call.CallId, output)).ConfigureAwait(false);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref toolsInFlight);
+            }
+
+            // Inline tools finish before response.done, which then asks for the follow-up. A slow tool can
+            // finish after it, so the last one to finish asks instead.
+            await RequestToolFollowUpAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>
+        ///     Runs a deliberately slow tool off the event loop and reports a failure instead of losing it.
+        /// </summary>
+        /// <param name="call">The completed function call.</param>
+        /// <returns>A task that completes once the output has been sent.</returns>
+        private async Task RunSlowToolAsync(SessionUpdateResponseFunctionCallArgumentsDone call)
+        {
+            try
+            {
+                await HandleFunctionCallAsync(call).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Tool {name} failed", call.Name);
+            }
         }
 
         /// <summary>
@@ -448,12 +532,18 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
         {
             // Voice Live rejects a response that overlaps another, and an MCP call completes while the
             // response that made it may still be open. The pending count is kept until that one is done.
-            if (session == null || responseActive || Volatile.Read(ref pendingToolCalls) == 0)
+            // Tools still running would each need the same response, so wait for the last one.
+            if (session == null || responseActive || Volatile.Read(ref toolsInFlight) > 0)
             {
                 return;
             }
 
-            Interlocked.Exchange(ref pendingToolCalls, 0);
+            // The exchange makes sure only one caller asks when response.done and a tool finish together.
+            if (Interlocked.Exchange(ref pendingToolCalls, 0) == 0)
+            {
+                return;
+            }
+
             await session.StartResponseAsync().ConfigureAwait(false);
         }
 
@@ -504,6 +594,13 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
 
         private async Task HandleSessionUpdatedAsync(SessionUpdateSessionUpdated sessionUpdated)
         {
+            // What the service kept of the session.update. A setting it ignores is dropped here without an
+            // error, so this is where to look when a feature silently does nothing.
+            if (logger.IsEnabled(LogLevel.Information) && sessionUpdated.Session != null)
+            {
+                logger.LogInformation("session.updated: {session}", ModelReaderWriter.Write(sessionUpdated.Session));
+            }
+
             if (avatarHandler == null || session == null)
             {
                 // Non-avatar mode: just start recording
@@ -611,11 +708,36 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
             }
         }
 
+        /// <summary>
+        ///     Stops the reply that is playing when the user starts to speak, and remembers its response id so its
+        ///     remaining deltas are dropped. The service stops generating it (interrupt_response); the client has to
+        ///     stop playing what it already received.
+        /// </summary>
+        private void InterruptPlayback()
+        {
+            if (playingResponseId == null)
+            {
+                return;
+            }
+
+            interruptedResponseId = playingResponseId;
+            playingResponseId = null;
+            TimeSpan discarded = audioHandler.ClearPlayback();
+            if (discarded > TimeSpan.Zero)
+            {
+                Console.WriteLine($"[Barge-in] stopped the reply ({discarded.TotalSeconds:0.0} s left unplayed)");
+            }
+        }
+
         private void HandleAudioDelta(SessionUpdateResponseAudioDelta audioDelta)
         {
-            if (avatarHandler != null)
+            if (avatarHandler != null || webSocketVideo != null)
             {
-                // The avatar carries its own audio over WebRTC.
+                // An avatar carries the reply audio inside its own media, whichever transport it uses: a WebRTC
+                // audio track, or an AAC track muxed into the WebSocket fMP4 next to the video (observed on
+                // 2026-09-15 at wire version 2026-07-15, with agent and model sessions alike, which then send no
+                // response.audio.delta at all). Playing PCM here as well would voice every reply twice if the
+                // service ever sent both.
                 return;
             }
 
@@ -625,11 +747,56 @@ namespace Com.Reseul.Azure.AI.Samples.VoiceLiveSDK
                 return;
             }
 
+            // After a barge-in the interrupted reply keeps streaming for a moment. Its late deltas are dropped,
+            // or they would be queued again and play ahead of the next reply. A new response id ends that.
+            string? responseId = audioDelta.ResponseId;
+            if (responseId != null)
+            {
+                if (responseId == interruptedResponseId)
+                {
+                    return;
+                }
+
+                playingResponseId = responseId;
+                interruptedResponseId = null;
+            }
+
             byte[] pcmData = audioDelta.Delta.ToArray();
             if (pcmData.Length > 0)
             {
                 audioHandler.AddPlaybackData(pcmData);
             }
+        }
+
+        /// <summary>
+        ///     Writes one avatar video frame that arrived over the WebSocket into the ffplay window.
+        /// </summary>
+        /// <remarks>
+        ///     Unlike <see cref="SessionUpdateResponseAudioDelta.Delta" />, which the SDK hands over already decoded
+        ///     as <see cref="BinaryData" />, <see cref="ServerEventResponseVideoDelta.Delta" /> is the base64 string
+        ///     from the wire, so it is decoded here. The frames are fragmented MP4 (an initialization segment, then
+        ///     fragments) carrying both the H.264 video and the AAC audio, which ffplay plays together.
+        /// </remarks>
+        /// <param name="videoDelta">The video delta event.</param>
+        private void HandleVideoDelta(ServerEventResponseVideoDelta videoDelta)
+        {
+            if (webSocketVideo == null || string.IsNullOrEmpty(videoDelta.Delta))
+            {
+                return;
+            }
+
+            byte[] frame;
+            try
+            {
+                frame = Convert.FromBase64String(videoDelta.Delta);
+            }
+            catch (FormatException ex)
+            {
+                logger.LogWarning(ex, "Video delta was not valid base64 (codec: {codec})", videoDelta.Codec);
+                return;
+            }
+
+            webSocketVideo.WriteFrame(frame);
         }
 
         #endregion

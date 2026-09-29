@@ -666,8 +666,14 @@ namespace Com.Reseul.Azure.AI.VoiceLiveAPI.Avatars.Streaming
                                 if (!string.IsNullOrEmpty(error))
                                 {
                                     lineCount++;
-                                    // Log ALL lines for debugging (temporary - increase to 100)
-                                    if (lineCount <= 100)
+
+                                    // FFmpeg reports its own failures here. They explain an empty video window,
+                                    // so they are surfaced rather than buried at trace level.
+                                    if (IsFfmpegFailure(error))
+                                    {
+                                        logger?.LogWarning("[AvatarVideoStreamer] FFmpeg: {error}", error);
+                                    }
+                                    else if (lineCount <= 100)
                                     {
                                         logger?.LogTrace("[AvatarVideoStreamer] FFmpeg #{count}: {error}", lineCount,
                                             error);
@@ -794,6 +800,20 @@ a=fmtp:96 packetization-mode=1";
                 }
 
                 ffplayRealtimeProcess = Process.Start(startInfo);
+
+                // Whether the window opened is the one thing a viewer can check from the log, so it is
+                // reported at information level rather than trace.
+                logger?.LogInformation("[AvatarVideoStreamer] FFplay started via {protocol} (process {id})",
+                    protocol, ffplayRealtimeProcess?.Id.ToString() ?? "not started");
+
+                if (ffplayRealtimeProcess != null)
+                {
+                    // A window that never appears usually means FFplay exited moments after starting, which
+                    // is otherwise invisible: the process was started successfully.
+                    ffplayRealtimeProcess.EnableRaisingEvents = true;
+                    ffplayRealtimeProcess.Exited += (_, _) => logger?.LogWarning(
+                        "[AvatarVideoStreamer] FFplay exited with code {code}", ffplayRealtimeProcess.ExitCode);
+                }
             }
             catch (Exception ex)
             {
@@ -976,6 +996,25 @@ a=fmtp:96 packetization-mode=1";
         }
 
         /// <summary>
+        ///     Tells an FFmpeg failure message apart from its routine progress output.
+        /// </summary>
+        /// <param name="line">One line of FFmpeg's standard error.</param>
+        /// <returns>True when the line reports an error or a failure.</returns>
+        private static bool IsFfmpegFailure(string line)
+        {
+            string[] markers = { "error", "failed", "invalid", "could not", "no such" };
+            foreach (string marker in markers)
+            {
+                if (line.Contains(marker, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
         ///     Checks if frame contains a specific NAL unit type.
         /// </summary>
         private static bool HasNALUnit(byte[] data, byte nalType)
@@ -1073,7 +1112,7 @@ a=fmtp:96 packetization-mode=1";
                 if (!firstVideoFrameWritten && videoFramesWrittenToFFmpeg == 1)
                 {
                     firstVideoFrameWritten = true;
-                    logger?.LogTrace(
+                    logger?.LogInformation(
                         "[AvatarVideoStreamer] First video frame written and flushed - starting FFplay now");
 
                     // Small delay to ensure FFmpeg starts RTP transmission

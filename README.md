@@ -74,9 +74,9 @@ not affect whether you can pick it:
 | Avatar with WebSocket video | Frames arriving on the session socket, with no SDP/ICE exchange |
 | `azure-personal` voice | A voice cloned from about 30 seconds of speech |
 | Semantic end-of-utterance detection | Waiting through a natural pause, judged from what was said (multilingual semantic model — not smart turn detection, which is still preview; try that in VoiceLiveConsoleApp) |
-| Auto-truncation on barge-in | The stored response matching what was actually heard |
+| Auto-truncation on barge-in | The stored response matching what was actually heard (talk over the reply; unplayed audio is dropped) |
 | MCP server | Tools hosted remotely, listed and executed by the service |
-| Interim response | Filler speech while a slow tool runs |
+| Interim response | A short filler spoken in the turn that calls a tool (only when the tool answers while that turn is still open — a slow tool gets none) |
 | Parallel tool calls | Two tools answered within one turn |
 | `avatar-sync` voice | A voice trained alongside a custom video avatar |
 
@@ -87,7 +87,7 @@ not affect whether you can pick it:
 | Message Handling | ServerMessageHandlerManager events | IAsyncEnumerable pattern |
 | API version | up to `2026-06-01-preview` | up to `2026-07-15` |
 | Feature menu | 14 preview features | 10 GA features |
-| Avatar Video Streaming | WebRTC and WebSocket | WebRTC |
+| Avatar Video Streaming | WebRTC and WebSocket | WebRTC and WebSocket |
 | Authentication | API Key / Entra ID | API Key / Entra ID |
 
 #### Running VoiceLiveSDKConsoleApp
@@ -103,6 +103,19 @@ PS D:\hoge\VoiceLiveAPISamples > dotnet run --project src/VoiceLiveSDKConsoleApp
 > [!NOTE]
 > VoiceLiveSDKConsoleApp uses the same user secrets configuration as VoiceLiveConsoleApp.
 > If you have already configured user secrets for VoiceLiveConsoleApp, you can use the same configuration.
+
+Its settings work the same way as VoiceLiveConsoleApp's (see [Configuration](#configuration)), and the
+settings the two share use the same user-secrets keys. Feature inputs such as the photo avatar, the scene,
+the personal voice or the custom avatar for `avatar-sync` can be given as arguments:
+
+```powershell
+PS ...> dotnet run --project src/VoiceLiveSDKConsoleApp -- --help
+PS ...> dotnet run --project src/VoiceLiveSDKConsoleApp -- --photo-avatar ren --scene-zoom 0.6
+PS ...> dotnet run --project src/VoiceLiveSDKConsoleApp -- --otel
+```
+
+`--otel` prints the SDK's OpenTelemetry spans (token usage, latency). It is off by default because it
+writes one line per event.
 
 ## Required Packages
 
